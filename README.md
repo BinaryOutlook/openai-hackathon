@@ -16,6 +16,10 @@ When the vote is decisive, the system can recommend or execute a resolution. Whe
 
 The result is an AI-powered return jury that helps platforms process routine disputes faster, detect suspicious buyer or seller behavior earlier, reduce manual clicking for operations teams, and protect the platform's reputation.
 
+## MVP Status
+
+For the practical hackathon demo boundary, supported traits, current gaps, scoring behavior, and recommended next increments, see [AI Return Jury MVP Traits](docs/MVP_TRAITS.md).
+
 ## Project Brief
 
 ### 1. Background

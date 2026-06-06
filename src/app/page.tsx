@@ -95,6 +95,7 @@ const routeStyles: Record<RouteKind, string> = {
 };
 
 type EvidenceAliases = Record<string, string>;
+type WorkspaceView = "hud" | "ai-jury";
 
 type ReviewerDecision = {
   finalVerdict: string;
@@ -103,6 +104,7 @@ type ReviewerDecision = {
   overrideReason: string;
   escalationTarget: string;
   notes: string;
+  updatedAt: string;
 };
 
 function cloneCase(caseInput: JuryCaseInput): JuryCaseInput {
@@ -116,7 +118,8 @@ function buildDefaultReviewerDecision(caseInput?: JuryCaseInput): ReviewerDecisi
     evidenceReliedOn: caseInput?.evidence.slice(0, 2).map((evidence) => evidence.id) ?? [],
     overrideReason: "",
     escalationTarget: "marketplace-ops",
-    notes: ""
+    notes: "",
+    updatedAt: ""
   };
 }
 
@@ -133,6 +136,7 @@ export default function Home() {
   const [hasUnrunChanges, setHasUnrunChanges] = useState(false);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [activeView, setActiveView] = useState<WorkspaceView>("hud");
   const [reviewerDecision, setReviewerDecision] = useState<ReviewerDecision>(() =>
     buildDefaultReviewerDecision(DEMO_CASES[0])
   );
@@ -185,6 +189,7 @@ export default function Home() {
   }, [caseInput.evidence]);
 
   const evidenceAliases = useMemo(() => buildEvidenceAliases(caseInput.evidence), [caseInput.evidence]);
+  const similarCases = useMemo(() => getSimilarPastCases(caseInput), [caseInput]);
   const displayedResult = isRunning || hasUnrunChanges ? null : result;
 
   async function runWorkflow(input = caseInput) {
@@ -275,7 +280,8 @@ export default function Home() {
   function updateReviewerDecision<K extends keyof ReviewerDecision>(key: K, value: ReviewerDecision[K]) {
     setReviewerDecision((current) => ({
       ...current,
-      [key]: value
+      [key]: value,
+      updatedAt: new Date().toISOString()
     }));
   }
 
@@ -297,19 +303,29 @@ export default function Home() {
     }
 
     const humanOverride = buildHumanOverride(overridePoint);
+    const exportedAt = new Date().toISOString();
+    const reviewerDecisionRecord = buildReviewerDecisionRecord({
+      caseInput,
+      reviewerDecision,
+      result: displayedResult,
+      evidenceAliases,
+      similarCases,
+      timestamp: reviewerDecision.updatedAt || exportedAt
+    });
     const exportPayload = {
       case: caseInput,
-      reviewerDecision,
+      reviewerDecision: reviewerDecisionRecord,
       workflow: {
         ...displayedResult,
         humanOverride,
         audit: {
           ...displayedResult.audit,
           humanOverride,
+          reviewerDecision: reviewerDecisionRecord,
           finalDecision: getClientFinalDecision(displayedResult, humanOverride, cooldownRemaining)
         }
       },
-      exportedAt: new Date().toISOString()
+      exportedAt
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
       type: "application/json"
@@ -324,7 +340,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-paper px-4 py-4 text-ink sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
+      <div className="mx-auto flex max-w-[1880px] flex-col gap-4">
         <header className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-teal text-white shadow-brand">
@@ -381,87 +397,215 @@ export default function Home() {
           </div>
         ) : null}
 
-        <WorkflowProgress
+        <WorkspaceTabs
+          activeView={activeView}
+          onChange={setActiveView}
           result={displayedResult}
           isRunning={isRunning}
           hasUnrunChanges={hasUnrunChanges}
           elapsedSeconds={elapsedSeconds}
         />
 
-        <ReviewerSnapshot
-          caseInput={caseInput}
-          result={displayedResult}
-          isRunning={isRunning}
-          hasUnrunChanges={hasUnrunChanges}
-          elapsedSeconds={elapsedSeconds}
-        />
-
-        <section className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
-          <div className="grid gap-4">
-            <ReviewQueue selectedCaseId={selectedCaseId} onSelectCase={loadCase} />
-            <CaseIntake
-              caseInput={caseInput}
-              uploadSource={uploadSource}
-              isEditable={isCaseEditable}
+        {activeView === "hud" ? (
+          <>
+            <WorkflowProgress
+              result={displayedResult}
               isRunning={isRunning}
               hasUnrunChanges={hasUnrunChanges}
-              onToggleEditable={() => setIsCaseEditable((current) => !current)}
-              onUpdateCase={updateCase}
-              onUpdateUploadSource={setUploadSource}
-              onAddEvidence={addEvidenceFiles}
+              elapsedSeconds={elapsedSeconds}
             />
-          </div>
-          <EvidenceBoard
-            caseInput={caseInput}
-            evidenceSummary={evidenceSummary}
-            evidenceAliases={evidenceAliases}
-          />
-          <VerdictPanel
-            caseInput={caseInput}
-            result={displayedResult}
-            isRunning={isRunning}
-            hasUnrunChanges={hasUnrunChanges}
-            cooldownRemaining={cooldownRemaining}
-            evidenceAliases={evidenceAliases}
-          />
-        </section>
 
-        {displayedResult?.route.routeKind === "human_review" ? (
-          <HumanReviewPanel
-            result={displayedResult}
-            caseInput={caseInput}
-            evidenceAliases={evidenceAliases}
-            reviewerDecision={reviewerDecision}
-            onDecisionChange={updateReviewerDecision}
-            onToggleEvidence={toggleReviewerEvidence}
-          />
-        ) : null}
-
-        {displayedResult?.route.routeKind === "provisional_ai_decision" ? (
-          <CooldownOverridePanel
-            result={displayedResult}
-            cooldownRemaining={cooldownRemaining}
-            overridePoint={overridePoint}
-            onOverridePointChange={setOverridePoint}
-          />
-        ) : null}
-
-        {displayedResult?.route.routeKind !== "standard_automation" ? (
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
-            <JuryPanel
-              opinions={displayedResult?.jury?.opinions ?? []}
-              isRunning={isRunning}
-              evidenceAliases={evidenceAliases}
-            />
-            <DeliberationPanel
-              result={displayedResult?.jury ?? null}
+            <ReviewerSnapshot
               caseInput={caseInput}
-              evidenceAliases={evidenceAliases}
+              result={displayedResult}
+              isRunning={isRunning}
+              hasUnrunChanges={hasUnrunChanges}
+              elapsedSeconds={elapsedSeconds}
             />
-          </section>
-        ) : null}
+
+            {displayedResult?.route.routeKind === "human_review" ? (
+              <HumanReviewPanel
+                result={displayedResult}
+                caseInput={caseInput}
+                evidenceAliases={evidenceAliases}
+                reviewerDecision={reviewerDecision}
+                similarCases={similarCases}
+                onDecisionChange={updateReviewerDecision}
+                onToggleEvidence={toggleReviewerEvidence}
+              />
+            ) : null}
+
+            {displayedResult?.route.routeKind === "provisional_ai_decision" ? (
+              <CooldownOverridePanel
+                result={displayedResult}
+                cooldownRemaining={cooldownRemaining}
+                overridePoint={overridePoint}
+                onOverridePointChange={setOverridePoint}
+              />
+            ) : null}
+
+            <section className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px] 2xl:grid-cols-[360px_minmax(0,1.35fr)_400px]">
+              <div className="grid gap-4 xl:self-start">
+                <ReviewQueue selectedCaseId={selectedCaseId} onSelectCase={loadCase} />
+                <CaseIntake
+                  caseInput={caseInput}
+                  uploadSource={uploadSource}
+                  isEditable={isCaseEditable}
+                  isRunning={isRunning}
+                  hasUnrunChanges={hasUnrunChanges}
+                  onToggleEditable={() => setIsCaseEditable((current) => !current)}
+                  onUpdateCase={updateCase}
+                  onUpdateUploadSource={setUploadSource}
+                  onAddEvidence={addEvidenceFiles}
+                />
+              </div>
+              <EvidenceBoard
+                caseInput={caseInput}
+                evidenceSummary={evidenceSummary}
+                evidenceAliases={evidenceAliases}
+              />
+              <div className="grid gap-4 xl:sticky xl:top-4 xl:self-start">
+                <VerdictPanel
+                  caseInput={caseInput}
+                  result={displayedResult}
+                  isRunning={isRunning}
+                  hasUnrunChanges={hasUnrunChanges}
+                  cooldownRemaining={cooldownRemaining}
+                  evidenceAliases={evidenceAliases}
+                />
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <WorkflowProgress
+              result={displayedResult}
+              isRunning={isRunning}
+              hasUnrunChanges={hasUnrunChanges}
+              elapsedSeconds={elapsedSeconds}
+            />
+
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px] 2xl:grid-cols-[minmax(0,1.45fr)_460px]">
+              <div className="grid gap-4">
+                <JuryPanel
+                  opinions={displayedResult?.jury?.opinions ?? []}
+                  isRunning={isRunning}
+                  routeKind={displayedResult?.route.routeKind}
+                  evidenceAliases={evidenceAliases}
+                />
+                <DeliberationPanel
+                  result={displayedResult?.jury ?? null}
+                  routeKind={displayedResult?.route.routeKind}
+                  caseInput={caseInput}
+                  evidenceAliases={evidenceAliases}
+                />
+              </div>
+              <div className="grid gap-4 xl:sticky xl:top-4 xl:self-start">
+                <RouteAuditPanel
+                  caseInput={caseInput}
+                  result={displayedResult}
+                  isRunning={isRunning}
+                  hasUnrunChanges={hasUnrunChanges}
+                  cooldownRemaining={cooldownRemaining}
+                  evidenceAliases={evidenceAliases}
+                />
+                <SimilarPastCases caseInput={caseInput} similarCases={similarCases} />
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </main>
+  );
+}
+
+function WorkspaceTabs({
+  activeView,
+  onChange,
+  result,
+  isRunning,
+  hasUnrunChanges,
+  elapsedSeconds
+}: {
+  activeView: WorkspaceView;
+  onChange: (view: WorkspaceView) => void;
+  result: WorkflowResult | null;
+  isRunning: boolean;
+  hasUnrunChanges: boolean;
+  elapsedSeconds: number;
+}) {
+  const stage = getWorkflowStage(elapsedSeconds);
+  const views: {
+    id: WorkspaceView;
+    label: string;
+    summary: string;
+    icon: ReactNode;
+  }[] = [
+    {
+      id: "hud",
+      label: "HUD",
+      summary: "Case route, evidence, risk, and reviewer action",
+      icon: <Gavel className="h-4 w-4" aria-hidden="true" />
+    },
+    {
+      id: "ai-jury",
+      label: "AI Jury Panel",
+      summary: "Agent reasoning, disagreement, and audit trail",
+      icon: <Sparkles className="h-4 w-4" aria-hidden="true" />
+    }
+  ];
+  const statusText = isRunning
+    ? stage.label
+    : hasUnrunChanges
+      ? "Changes made"
+      : result?.route.routeKind
+        ? routeLabels[result.route.routeKind]
+        : "Awaiting workflow";
+
+  return (
+    <nav
+      aria-label="Reviewer workspace views"
+      className="grid gap-3 rounded-md border border-line bg-white p-2 shadow-soft lg:grid-cols-[minmax(0,1fr)_auto]"
+    >
+      <div className="grid gap-2 sm:grid-cols-2" role="tablist" aria-label="Workspace view">
+        {views.map((view) => {
+          const selected = activeView === view.id;
+          return (
+            <button
+              key={view.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => onChange(view.id)}
+              className={`min-h-16 rounded-md border px-3 py-2 text-left transition ${
+                selected
+                  ? "border-teal bg-[#fff7f4] text-ink shadow-brand"
+                  : "border-transparent bg-white text-graphite hover:border-[#fdb098] hover:bg-[#fff7f4]"
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <span className={selected ? "text-teal" : "text-graphite"}>{view.icon}</span>
+                {view.label}
+              </span>
+              <span className="mt-1 block text-xs leading-5">{view.summary}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-[#f5f5f5] px-3 py-2 lg:min-w-64">
+        <div>
+          <p className="text-xs font-semibold uppercase text-graphite">Workspace status</p>
+          <p className="mt-1 text-sm font-semibold text-ink">{statusText}</p>
+        </div>
+        {isRunning ? (
+          <Loader2 className="h-5 w-5 animate-spin text-teal" aria-hidden="true" />
+        ) : hasUnrunChanges ? (
+          <AlertTriangle className="h-5 w-5 text-[#7a4d00]" aria-hidden="true" />
+        ) : (
+          <BadgeCheck className="h-5 w-5 text-teal" aria-hidden="true" />
+        )}
+      </div>
+    </nav>
   );
 }
 
@@ -496,7 +640,7 @@ function ReviewQueue({
         ))}
       </div>
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid max-h-[360px] gap-2 overflow-y-auto pr-1">
         {DEMO_CASES.map((demoCase) => {
           const meta = getQueueMeta(demoCase);
           const selected = demoCase.id === selectedCaseId;
@@ -624,7 +768,7 @@ function CaseIntake({
           Buyer claim
           <textarea
             value={caseInput.buyerClaim}
-            rows={5}
+            rows={3}
             disabled={controlsDisabled}
             onChange={(event) => onUpdateCase("buyerClaim", event.target.value)}
             className={textAreaClass}
@@ -635,7 +779,7 @@ function CaseIntake({
           Seller response
           <textarea
             value={caseInput.sellerResponse}
-            rows={5}
+            rows={3}
             disabled={controlsDisabled}
             onChange={(event) => onUpdateCase("sellerResponse", event.target.value)}
             className={textAreaClass}
@@ -704,7 +848,7 @@ function EvidenceBoard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1fr)]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1fr)] xl:max-h-[760px] xl:overflow-y-auto xl:pr-1">
         <EvidenceColumn
           title="Buyer"
           subtitle={summarizeHistory(caseInput.buyerHistory)}
@@ -1098,6 +1242,7 @@ function HumanReviewPanel({
   caseInput,
   evidenceAliases,
   reviewerDecision,
+  similarCases,
   onDecisionChange,
   onToggleEvidence
 }: {
@@ -1105,6 +1250,7 @@ function HumanReviewPanel({
   caseInput: JuryCaseInput;
   evidenceAliases: EvidenceAliases;
   reviewerDecision: ReviewerDecision;
+  similarCases: JuryCaseInput[];
   onDecisionChange: <K extends keyof ReviewerDecision>(key: K, value: ReviewerDecision[K]) => void;
   onToggleEvidence: (evidenceId: string) => void;
 }) {
@@ -1116,12 +1262,13 @@ function HumanReviewPanel({
         <h2 className="text-base font-semibold">Human Review</h2>
         <AlertTriangle className="h-5 w-5" aria-hidden="true" />
       </div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <ReviewList title="Indicators" items={aliasEvidenceReferences(context?.indicators ?? result.route.indicators, evidenceAliases)} />
-        <ReviewList title="Warnings" items={aliasEvidenceReferences(context?.warnings ?? result.route.warnings, evidenceAliases)} />
-        <ReviewList title="Review Focus" items={aliasEvidenceReferences(context?.suggestedReviewFocus ?? [], evidenceAliases)} />
-      </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <div className="grid gap-3">
+          <ReviewList title="Indicators" items={aliasEvidenceReferences(context?.indicators ?? result.route.indicators, evidenceAliases)} />
+          <ReviewList title="Warnings" items={aliasEvidenceReferences(context?.warnings ?? result.route.warnings, evidenceAliases)} />
+          <ReviewList title="Review Focus" items={aliasEvidenceReferences(context?.suggestedReviewFocus ?? [], evidenceAliases)} />
+        </div>
         <ReviewerVerdictComposer
           caseInput={caseInput}
           evidenceAliases={evidenceAliases}
@@ -1130,6 +1277,13 @@ function HumanReviewPanel({
           onToggleEvidence={onToggleEvidence}
         />
         <div className="grid gap-4">
+          <DecisionRecordPreview
+            result={result}
+            caseInput={caseInput}
+            evidenceAliases={evidenceAliases}
+            reviewerDecision={reviewerDecision}
+            similarCases={similarCases}
+          />
           <EscalationWorkflow reviewerDecision={reviewerDecision} />
           <CalibrationPanel result={result} reviewerDecision={reviewerDecision} />
         </div>
@@ -1167,7 +1321,8 @@ function ReviewerVerdictComposer({
           >
             <option value="">Select final verdict</option>
             <option value="approve_return">Approve return/refund</option>
-            <option value="reject_return">Reject return</option>
+            <option value="approve_with_note">Approve with note</option>
+            <option value="reject_return">Reject with reason</option>
             <option value="request_more_evidence">Request more evidence</option>
             <option value="escalate">Escalate</option>
           </select>
@@ -1180,7 +1335,7 @@ function ReviewerVerdictComposer({
             rows={4}
             onChange={(event) => onDecisionChange("reason", event.target.value)}
             className="resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6"
-            placeholder="Write the final reviewer rationale."
+            placeholder="Write the final reviewer rationale or approval note."
           />
         </label>
 
@@ -1242,6 +1397,51 @@ function ReviewerVerdictComposer({
             placeholder="Handoff notes for the next reviewer or operations team."
           />
         </label>
+      </div>
+    </div>
+  );
+}
+
+function DecisionRecordPreview({
+  result,
+  caseInput,
+  evidenceAliases,
+  reviewerDecision,
+  similarCases
+}: {
+  result: WorkflowResult;
+  caseInput: JuryCaseInput;
+  evidenceAliases: EvidenceAliases;
+  reviewerDecision: ReviewerDecision;
+  similarCases: JuryCaseInput[];
+}) {
+  const selectedEvidence = formatEvidenceList(reviewerDecision.evidenceReliedOn, evidenceAliases);
+  const recommendation = getSystemRecommendation(result, caseInput);
+  const reasonStatus = reviewerDecision.finalVerdict === "reject_return" && !reviewerDecision.reason.trim()
+    ? "Reason needed"
+    : reviewerDecision.finalVerdict
+      ? "Decision drafted"
+      : "Awaiting verdict";
+  const precedentHint = similarCases.length
+    ? similarCases.map((demoCase) => demoCase.id).join(", ")
+    : "No close demo precedent";
+
+  return (
+    <div className="rounded-md border border-coral/30 bg-white p-4 text-ink">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-teal" aria-hidden="true" />
+        <h3 className="text-sm font-semibold">Decision Record</h3>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <ReadOnlyMetric label="Record status" value={reasonStatus} />
+        <ReadOnlyMetric label="System recommendation" value={recommendation} />
+        <ReadOnlyMetric label="Route" value={routeLabels[result.route.routeKind]} />
+        <ReadOnlyMetric label="Evidence relied on" value={selectedEvidence} />
+        <ReadOnlyMetric label="Similar cases" value={precedentHint} />
+        <ReadOnlyMetric
+          label="Updated"
+          value={reviewerDecision.updatedAt ? new Date(reviewerDecision.updatedAt).toLocaleString() : "Not drafted"}
+        />
       </div>
     </div>
   );
@@ -1350,12 +1550,87 @@ function CooldownOverridePanel({
   );
 }
 
+function RouteAuditPanel({
+  caseInput,
+  result,
+  isRunning,
+  hasUnrunChanges,
+  cooldownRemaining,
+  evidenceAliases
+}: {
+  caseInput: JuryCaseInput;
+  result: WorkflowResult | null;
+  isRunning: boolean;
+  hasUnrunChanges: boolean;
+  cooldownRemaining: number;
+  evidenceAliases: EvidenceAliases;
+}) {
+  const verdict = result?.provisionalDecision?.verdict ?? result?.jury?.verdict;
+  const evidenceIds = result?.audit.evidenceIds ?? [];
+  const warnings = uniqueText([
+    ...(result?.route.warnings ?? []),
+    ...(result?.jury?.verdict.escalationReasons ?? [])
+  ]);
+  const indicators = result?.route.indicators ?? [];
+
+  return (
+    <section className="rounded-md border border-line bg-white p-4 shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Audit Trace</h2>
+          <p className="mt-1 text-xs text-graphite">{caseInput.id}</p>
+        </div>
+        <FileText className="h-5 w-5 text-teal" aria-hidden="true" />
+      </div>
+
+      {isRunning || hasUnrunChanges ? (
+        <PendingComputedSection isRunning={isRunning} hasUnrunChanges={hasUnrunChanges} />
+      ) : result ? (
+        <div className="mt-4 grid gap-3">
+          <ReadOnlyMetric label="Route" value={routeLabels[result.route.routeKind]} />
+          <ReadOnlyMetric label="Recommendation" value={getSystemRecommendation(result, caseInput)} />
+          <ReadOnlyMetric label="Final audit decision" value={result.audit.finalDecision} />
+          <ReadOnlyMetric
+            label="Evidence IDs"
+            value={evidenceIds.length ? evidenceIds.map((id) => evidenceAliases[id] ?? id).join(", ") : "No cited evidence"}
+          />
+          {verdict ? (
+            <>
+              <MetricBar
+                label="Overall confidence"
+                value={verdict.overallConfidence}
+                tone={verdict.overallConfidence >= 0.75 ? "teal" : "amber"}
+              />
+              <MetricBar
+                label="Risk score"
+                value={verdict.riskScore}
+                tone={verdict.riskScore >= 0.7 ? "coral" : "cedar"}
+              />
+            </>
+          ) : null}
+          {result.route.routeKind === "provisional_ai_decision" ? (
+            <ReadOnlyMetric
+              label="Cooldown"
+              value={cooldownRemaining > 0 ? `${cooldownRemaining}s remaining` : "AI decision final"}
+            />
+          ) : null}
+          <RiskPanel result={result} />
+          <ReviewList title="Route Indicators" items={aliasEvidenceReferences(indicators, evidenceAliases)} />
+          <ReviewList title="Warnings and Escalation" items={aliasEvidenceReferences(warnings, evidenceAliases)} />
+        </div>
+      ) : (
+        <EmptyState label="Awaiting workflow audit" />
+      )}
+    </section>
+  );
+}
+
 function ReviewList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-md border border-coral/30 bg-white p-3">
       <p className="text-xs font-semibold uppercase">{title}</p>
       {items.length ? (
-        <ul className="mt-2 grid gap-2 text-sm leading-6">
+        <ul className="mt-2 grid max-h-44 gap-2 overflow-y-auto pr-1 text-sm leading-6">
           {items.map((item) => (
             <li key={item}>{item}</li>
           ))}
@@ -1370,10 +1645,12 @@ function ReviewList({ title, items }: { title: string; items: string[] }) {
 function JuryPanel({
   opinions,
   isRunning,
+  routeKind,
   evidenceAliases
 }: {
   opinions: AgentOpinion[];
   isRunning: boolean;
+  routeKind?: RouteKind;
   evidenceAliases: EvidenceAliases;
 }) {
   return (
@@ -1412,7 +1689,15 @@ function JuryPanel({
           ))}
         </div>
       ) : (
-        <EmptyState label={isRunning ? "Jury running" : "No opinions yet"} />
+        <EmptyState
+          label={
+            isRunning
+              ? "Jury running"
+              : routeKind === "standard_automation"
+                ? "Standard automation bypassed jury"
+                : "No opinions yet"
+          }
+        />
       )}
     </section>
   );
@@ -1420,10 +1705,12 @@ function JuryPanel({
 
 function DeliberationPanel({
   result,
+  routeKind,
   caseInput,
   evidenceAliases
 }: {
   result: WorkflowResult["jury"];
+  routeKind?: RouteKind;
   caseInput: JuryCaseInput;
   evidenceAliases: EvidenceAliases;
 }) {
@@ -1456,7 +1743,7 @@ function DeliberationPanel({
           <SimilarPastCases caseInput={caseInput} />
         </div>
       ) : (
-        <EmptyState label="Awaiting deliberation" />
+        <EmptyState label={routeKind === "standard_automation" ? "No jury deliberation required" : "Awaiting deliberation"} />
       )}
     </section>
   );
@@ -1539,12 +1826,14 @@ function AgentInteractionFramework({ result }: { result: NonNullable<WorkflowRes
   );
 }
 
-function SimilarPastCases({ caseInput }: { caseInput: JuryCaseInput }) {
-  const similar = DEMO_CASES.filter(
-    (demoCase) =>
-      demoCase.id !== caseInput.id &&
-      (demoCase.requestReason === caseInput.requestReason || demoCase.category === caseInput.category)
-  ).slice(0, 2);
+function SimilarPastCases({
+  caseInput,
+  similarCases
+}: {
+  caseInput: JuryCaseInput;
+  similarCases?: JuryCaseInput[];
+}) {
+  const similar = similarCases ?? getSimilarPastCases(caseInput);
 
   return (
     <div className="rounded-md border border-line bg-white p-3">
@@ -1928,6 +2217,88 @@ function getStandardAutomationDecision(caseInput: JuryCaseInput) {
   };
 }
 
+function getSimilarPastCases(caseInput: JuryCaseInput) {
+  return DEMO_CASES.filter(
+    (demoCase) =>
+      demoCase.id !== caseInput.id &&
+      (demoCase.requestReason === caseInput.requestReason || demoCase.category === caseInput.category)
+  ).slice(0, 2);
+}
+
+function getSystemRecommendation(result: WorkflowResult, caseInput: JuryCaseInput) {
+  if (result.route.routeKind === "standard_automation") {
+    return getStandardAutomationDecision(caseInput).title;
+  }
+
+  return result.provisionalDecision?.verdict.decision ?? result.jury?.verdict.decision ?? result.route.routingReason;
+}
+
+function formatReviewerVerdict(value: string) {
+  switch (value) {
+    case "approve_return":
+      return "Approve return/refund";
+    case "approve_with_note":
+      return "Approve with note";
+    case "reject_return":
+      return "Reject with reason";
+    case "request_more_evidence":
+      return "Request more evidence";
+    case "escalate":
+      return "Escalate";
+    default:
+      return "Not selected";
+  }
+}
+
+function buildReviewerDecisionRecord({
+  caseInput,
+  reviewerDecision,
+  result,
+  evidenceAliases,
+  similarCases,
+  timestamp
+}: {
+  caseInput: JuryCaseInput;
+  reviewerDecision: ReviewerDecision;
+  result: WorkflowResult;
+  evidenceAliases: EvidenceAliases;
+  similarCases: JuryCaseInput[];
+  timestamp: string;
+}) {
+  const warnings = uniqueText([
+    ...result.route.warnings,
+    ...(result.jury?.verdict.escalationReasons ?? [])
+  ]);
+
+  return {
+    caseId: caseInput.id,
+    decision: reviewerDecision.finalVerdict || "not_selected",
+    decisionLabel: formatReviewerVerdict(reviewerDecision.finalVerdict),
+    reason: reviewerDecision.reason.trim(),
+    notes: reviewerDecision.notes.trim(),
+    overrideReason: reviewerDecision.overrideReason.trim(),
+    evidenceReliedOn: reviewerDecision.evidenceReliedOn.map((id) => ({
+      id,
+      alias: evidenceAliases[id] ?? id,
+      label: caseInput.evidence.find((evidence) => evidence.id === id)?.label ?? id
+    })),
+    systemRecommendation: getSystemRecommendation(result, caseInput),
+    routeKind: result.route.routeKind,
+    routeLabel: routeLabels[result.route.routeKind],
+    riskWarnings: warnings,
+    escalationSignals: result.route.indicators,
+    similarPastCases: similarCases.map((demoCase) => ({
+      id: demoCase.id,
+      title: demoCase.title,
+      requestReason: requestReasonLabels[demoCase.requestReason],
+      category: demoCase.category,
+      orderValue: demoCase.orderValue
+    })),
+    timestamp,
+    persistenceStatus: "exported_audit_json"
+  };
+}
+
 function getRequiredHumanAction(
   result: WorkflowResult | null,
   caseInput: JuryCaseInput,
@@ -2035,7 +2406,7 @@ function formatEscalationTarget(value: string) {
 function isReviewerAligned(systemDecision: string, reviewerVerdict: string) {
   const normalizedSystem = systemDecision.toLowerCase();
 
-  if (reviewerVerdict === "approve_return") {
+  if (reviewerVerdict === "approve_return" || reviewerVerdict === "approve_with_note") {
     return normalizedSystem.includes("approve") || normalizedSystem.includes("buyer");
   }
 

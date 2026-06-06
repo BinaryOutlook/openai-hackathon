@@ -17,6 +17,7 @@ export function ReviewActionStrip({
   isRunning,
   hasUnrunChanges,
   elapsedSeconds,
+  forceHumanReview = false,
   onOpenHumanReview
 }: {
   caseInput: JuryCaseInput;
@@ -24,11 +25,12 @@ export function ReviewActionStrip({
   isRunning: boolean;
   hasUnrunChanges: boolean;
   elapsedSeconds: number;
+  forceHumanReview?: boolean;
   onOpenHumanReview: () => void;
 }) {
   const stage = getWorkflowStage(elapsedSeconds);
   const verdict = result?.provisionalDecision?.verdict ?? result?.jury?.verdict;
-  const routeKind = result?.route.routeKind;
+  const routeKind = forceHumanReview ? "human_review" : result?.route.routeKind;
   const routeLabel = isRunning
     ? stage.label
     : hasUnrunChanges
@@ -45,6 +47,8 @@ export function ReviewActionStrip({
     ? stage.detail
     : hasUnrunChanges
       ? "Inputs changed after the last workflow run."
+      : forceHumanReview
+        ? "Reviewer overruled the provisional AI decision during cooldown."
       : result?.route.routingReason ?? "Run workflow to produce a route-specific reason.";
   const voteSplit = verdict
     ? formatVoteSplit(verdict.voteSummary)
@@ -60,7 +64,9 @@ export function ReviewActionStrip({
         : "Pending";
   const warningCount = result?.humanReviewContext?.warnings.length ?? result?.route.warnings.length ?? 0;
   const focusCount = result?.humanReviewContext?.suggestedReviewFocus.length ?? 0;
-  const nextAction = getRequiredHumanAction(result, caseInput, hasUnrunChanges, isRunning);
+  const nextAction = forceHumanReview
+    ? "Complete final verdict and rationale"
+    : getRequiredHumanAction(result, caseInput, hasUnrunChanges, isRunning);
   const showHumanAction = routeKind === "human_review" && !isRunning && !hasUnrunChanges;
   const stripIsUrgent = routeKind === "human_review" && !isRunning && !hasUnrunChanges;
   const stripTone = stripIsUrgent
@@ -129,14 +135,17 @@ export function WorkflowProgress({
   result,
   isRunning,
   hasUnrunChanges,
-  elapsedSeconds
+  elapsedSeconds,
+  forceHumanReview = false
 }: {
   result: WorkflowResult | null;
   isRunning: boolean;
   hasUnrunChanges: boolean;
   elapsedSeconds: number;
+  forceHumanReview?: boolean;
 }) {
   const stage = getWorkflowStage(elapsedSeconds);
+  const routeKind = forceHumanReview ? "human_review" : result?.route.routeKind;
 
   return (
     <section className="grid gap-3 rounded-md border border-line bg-white p-3 shadow-soft lg:grid-cols-[1fr_1.25fr_1fr]">
@@ -147,9 +156,9 @@ export function WorkflowProgress({
             <span className="rounded-md border border-amber/30 bg-[#fff3d6] px-2.5 py-1 text-sm font-semibold text-[#7a4d00]">
               {stage.label}
             </span>
-          ) : result?.route.routeKind ? (
-            <span className={`rounded-md border px-2.5 py-1 text-sm font-semibold ${routeStyles[result.route.routeKind]}`}>
-              {routeLabels[result.route.routeKind]}
+          ) : routeKind ? (
+            <span className={`rounded-md border px-2.5 py-1 text-sm font-semibold ${routeStyles[routeKind]}`}>
+              {routeLabels[routeKind]}
             </span>
           ) : (
             <span className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1 text-sm font-semibold text-graphite">
@@ -164,6 +173,8 @@ export function WorkflowProgress({
         <p className="mt-2 text-sm leading-6 text-graphite">
           {isRunning
             ? stage.detail
+            : forceHumanReview
+              ? "Reviewer overruled the provisional AI decision during cooldown."
             : result?.route.routingReason ?? "Run the workflow to select standard automation, human review, or provisional decision."}
         </p>
       </div>

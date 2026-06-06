@@ -28,7 +28,7 @@ export function CaseIntake({
   const inputClass =
     "min-h-11 rounded-md border border-line bg-white px-3 text-sm disabled:bg-[#f5f5f5] disabled:text-graphite";
   const textAreaClass =
-    "resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 disabled:bg-[#f5f5f5] disabled:text-graphite";
+    "min-h-[6.5rem] max-h-44 resize-y rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 disabled:bg-[#f5f5f5] disabled:text-graphite";
 
   return (
     <section className="rounded-md border border-line bg-white p-4 shadow-soft">
@@ -93,7 +93,7 @@ export function CaseIntake({
           Buyer claim
           <textarea
             value={caseInput.buyerClaim}
-            rows={2}
+            rows={4}
             disabled={controlsDisabled}
             onChange={(event) => onUpdateCase("buyerClaim", event.target.value)}
             className={textAreaClass}
@@ -104,7 +104,7 @@ export function CaseIntake({
           Seller response
           <textarea
             value={caseInput.sellerResponse}
-            rows={2}
+            rows={4}
             disabled={controlsDisabled}
             onChange={(event) => onUpdateCase("sellerResponse", event.target.value)}
             className={textAreaClass}

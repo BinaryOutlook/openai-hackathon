@@ -11,7 +11,8 @@ export function WorkspaceTabs({
   result,
   isRunning,
   hasUnrunChanges,
-  elapsedSeconds
+  elapsedSeconds,
+  forceHumanReview = false
 }: {
   activeView: WorkspaceView;
   onChange: (view: WorkspaceView) => void;
@@ -19,6 +20,7 @@ export function WorkspaceTabs({
   isRunning: boolean;
   hasUnrunChanges: boolean;
   elapsedSeconds: number;
+  forceHumanReview?: boolean;
 }) {
   const stage = getWorkflowStage(elapsedSeconds);
   const views: {
@@ -34,22 +36,24 @@ export function WorkspaceTabs({
       icon: <Gavel className="h-4 w-4" aria-hidden="true" />
     },
     {
-      id: "human-review",
-      label: "Human Review",
-      summary: "Final verdict, rationale, and handoff record",
-      icon: <UserCheck className="h-4 w-4" aria-hidden="true" />
-    },
-    {
       id: "ai-jury",
       label: "AI Jury Panel",
       summary: "Agent reasoning, disagreement, and audit trail",
       icon: <Sparkles className="h-4 w-4" aria-hidden="true" />
+    },
+    {
+      id: "human-review",
+      label: "Human Review",
+      summary: "Final verdict, rationale, and handoff record",
+      icon: <UserCheck className="h-4 w-4" aria-hidden="true" />
     }
   ];
   const statusText = isRunning
     ? stage.label
     : hasUnrunChanges
       ? "Changes made"
+      : forceHumanReview
+        ? routeLabels.human_review
       : result?.route.routeKind
         ? routeLabels[result.route.routeKind]
         : "Awaiting workflow";

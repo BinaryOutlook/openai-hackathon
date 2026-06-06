@@ -35,13 +35,17 @@ import {
   cloneCase,
   evidenceSourcePrefixes,
   fileToDataUrl,
+  formatReviewerVerdict,
   getClientFinalDecision,
   getExportValidation,
   getSimilarPastCases,
   sourceLabels,
+  type QueueCaseStatus,
   type ReviewerDecision,
   type WorkspaceView
 } from "./_lib/workspace";
+
+const COOLDOWN_EXTENSION_MS = 10 * 60 * 1000;
 
 function buildClientPreviewJury(caseInput: JuryCaseInput): {
   jury: JuryRunResult | null;
@@ -66,12 +70,35 @@ function buildClientPreviewJury(caseInput: JuryCaseInput): {
   };
 }
 
+function buildInitialQueueStatuses() {
+  return Object.fromEntries(DEMO_CASES.map((demoCase) => [demoCase.id, "pending"])) as Record<
+    string,
+    QueueCaseStatus
+  >;
+}
+
+function getWorkflowQueueStatus(workflowResult: WorkflowResult): QueueCaseStatus {
+  if (workflowResult.route.routeKind === "standard_automation") {
+    return "archived";
+  }
+
+  if (workflowResult.route.routeKind === "provisional_ai_decision") {
+    return "done";
+  }
+
+  return "pending";
+}
+
 export default function Home() {
   const [caseInput, setCaseInput] = useState<JuryCaseInput>(() => cloneCase(DEMO_CASES[0]));
   const [selectedCaseId, setSelectedCaseId] = useState(DEMO_CASES[0].id);
+  const [caseStatuses, setCaseStatuses] = useState<Record<string, QueueCaseStatus>>(buildInitialQueueStatuses);
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [uploadSource, setUploadSource] = useState<EvidenceSource>("buyer");
   const [overridePoint, setOverridePoint] = useState("");
+  const [cooldownExpiresAtOverride, setCooldownExpiresAtOverride] = useState<string | null>(null);
+  const [cooldownRemarkSavedAt, setCooldownRemarkSavedAt] = useState("");
+  const [manualHumanReviewCaseIds, setManualHumanReviewCaseIds] = useState<Record<string, true>>({});
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,10 +126,11 @@ export default function Home() {
       return;
     }
 
+    const expiresAt = cooldownExpiresAtOverride ?? result.provisionalDecision.expiresAt;
     const updateRemaining = () => {
       const remaining = Math.max(
         0,
-        Math.ceil((Date.parse(result.provisionalDecision!.expiresAt) - Date.now()) / 1000)
+        Math.ceil((Date.parse(expiresAt) - Date.now()) / 1000)
       );
       setCooldownRemaining(remaining);
     };
@@ -110,7 +138,7 @@ export default function Home() {
     updateRemaining();
     const timer = window.setInterval(updateRemaining, 1000);
     return () => window.clearInterval(timer);
-  }, [hasUnrunChanges, isRunning, result?.provisionalDecision?.expiresAt]);
+  }, [cooldownExpiresAtOverride, hasUnrunChanges, isRunning, result?.provisionalDecision?.expiresAt]);
 
   useEffect(() => {
     if (!isRunning || !runStartedAt) {
@@ -159,6 +187,14 @@ export default function Home() {
   const evidenceAliases = useMemo(() => buildEvidenceAliases(caseInput.evidence), [caseInput.evidence]);
   const similarCases = useMemo(() => getSimilarPastCases(caseInput), [caseInput]);
   const displayedResult = isRunning || hasUnrunChanges ? null : result;
+  const manualHumanReviewActive = Boolean(
+    displayedResult?.route.routeKind === "provisional_ai_decision" && manualHumanReviewCaseIds[selectedCaseId]
+  );
+  const requiresHumanClosure = Boolean(displayedResult?.route.routeKind === "human_review" || manualHumanReviewActive);
+  const selectedCaseStatus = caseStatuses[selectedCaseId] ?? "pending";
+  const effectiveCooldownExpiresAt = displayedResult?.provisionalDecision
+    ? cooldownExpiresAtOverride ?? displayedResult.provisionalDecision.expiresAt
+    : null;
   const displayedJury = displayedResult?.jury ?? (isRunning ? progressiveJury : null);
   const displayedRouteKind = displayedResult?.route.routeKind ?? (isRunning ? progressiveRouteKind : undefined);
   const isDebateRevealing = Boolean(
@@ -167,8 +203,8 @@ export default function Home() {
       visibleDebateTurnCount < displayedJury.debateTurns.length
   );
   const exportValidation = useMemo(
-    () => getExportValidation(displayedResult, caseInput, reviewerDecision),
-    [caseInput, displayedResult, reviewerDecision]
+    () => getExportValidation(displayedResult, caseInput, reviewerDecision, requiresHumanClosure),
+    [caseInput, displayedResult, requiresHumanClosure, reviewerDecision]
   );
 
   async function runWorkflow(input = caseInput) {
@@ -179,9 +215,16 @@ export default function Home() {
     setError(null);
     setResult(null);
     setCooldownRemaining(0);
+    setCooldownExpiresAtOverride(null);
+    setCooldownRemarkSavedAt("");
     setElapsedSeconds(0);
     setRunStartedAt(Date.now());
     setHasUnrunChanges(false);
+    setManualHumanReviewCaseIds((current) => {
+      const next = { ...current };
+      delete next[inputSnapshot.id];
+      return next;
+    });
     setProgressiveRouteKind(preview.routeKind);
     setProgressiveJury(preview.jury);
     setVisibleDebateTurnCount(preview.jury ? 1 : 0);
@@ -201,6 +244,10 @@ export default function Home() {
 
       const payload = (await response.json()) as WorkflowResult;
       setResult(payload);
+      setCaseStatuses((current) => ({
+        ...current,
+        [inputSnapshot.id]: getWorkflowQueueStatus(payload)
+      }));
       setOverridePoint("");
       setReviewerDecision(buildDefaultReviewerDecision(inputSnapshot));
       setSavedDraftAt("");
@@ -222,6 +269,9 @@ export default function Home() {
     setIsCaseEditable(false);
     setReviewerDecision(buildDefaultReviewerDecision(nextCase));
     setSavedDraftAt("");
+    setOverridePoint("");
+    setCooldownExpiresAtOverride(null);
+    setCooldownRemarkSavedAt("");
     setHasUnrunChanges(false);
     void runWorkflow(nextCase);
   }
@@ -230,9 +280,20 @@ export default function Home() {
     setHasUnrunChanges(true);
     setResult(null);
     setCooldownRemaining(0);
+    setCooldownExpiresAtOverride(null);
+    setCooldownRemarkSavedAt("");
     setProgressiveJury(null);
     setProgressiveRouteKind(undefined);
     setVisibleDebateTurnCount(0);
+    setManualHumanReviewCaseIds((current) => {
+      const next = { ...current };
+      delete next[caseInput.id];
+      return next;
+    });
+    setCaseStatuses((current) => ({
+      ...current,
+      [caseInput.id]: "pending"
+    }));
   }
 
   function updateCase<K extends keyof JuryCaseInput>(key: K, value: JuryCaseInput[K]) {
@@ -294,13 +355,89 @@ export default function Home() {
     });
   }
 
+  function markSelectedCaseStatus(status: QueueCaseStatus) {
+    setCaseStatuses((current) => ({
+      ...current,
+      [selectedCaseId]: status
+    }));
+  }
+
+  function saveCooldownRemark() {
+    if (!overridePoint.trim()) {
+      setError("Add a cooldown remark before saving it.");
+      return;
+    }
+
+    setError(null);
+    setCooldownRemarkSavedAt(new Date().toISOString());
+    markSelectedCaseStatus("done");
+  }
+
+  function extendCooldown() {
+    if (!displayedResult?.provisionalDecision) {
+      return;
+    }
+
+    const currentExpiry = Date.parse(effectiveCooldownExpiresAt ?? displayedResult.provisionalDecision.expiresAt);
+    const nextExpiry = new Date(Math.max(Date.now(), currentExpiry) + COOLDOWN_EXTENSION_MS).toISOString();
+    setCooldownExpiresAtOverride(nextExpiry);
+    markSelectedCaseStatus("done");
+  }
+
+  function overruleCooldown() {
+    if (!displayedResult?.provisionalDecision) {
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    setManualHumanReviewCaseIds((current) => ({
+      ...current,
+      [selectedCaseId]: true
+    }));
+    markSelectedCaseStatus("pending");
+    setReviewerDecision((current) => ({
+      ...current,
+      overrideReason: current.overrideReason || overridePoint.trim(),
+      notes: current.notes || "Overruled from provisional AI cooldown.",
+      updatedAt: timestamp
+    }));
+    setActiveView("human-review");
+  }
+
+  function escalateSupervisor() {
+    const timestamp = new Date().toISOString();
+    setReviewerDecision((current) => ({
+      ...current,
+      finalVerdict: "escalate",
+      reason: current.reason.trim() || "Escalated to supervisor for final operational review.",
+      updatedAt: timestamp
+    }));
+    setSavedDraftAt(timestamp);
+    markSelectedCaseStatus("done");
+    setError(null);
+  }
+
+  function submitHumanReview() {
+    if (!displayedResult || !exportValidation.canExport) {
+      setError(exportValidation.reason);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    setSavedDraftAt(timestamp);
+    markSelectedCaseStatus("archived");
+    setError(null);
+  }
+
   function exportVerdict() {
     if (!displayedResult || !exportValidation.canExport) {
       setError(exportValidation.reason);
       return;
     }
 
-    const humanOverride = buildHumanOverride(overridePoint);
+    const humanOverride = buildHumanOverride(
+      manualHumanReviewActive ? reviewerDecision.overrideReason || overridePoint : overridePoint
+    );
     const exportedAt = new Date().toISOString();
     const reviewerDecisionRecord = buildReviewerDecisionRecord({
       caseInput,
@@ -320,7 +457,9 @@ export default function Home() {
           ...displayedResult.audit,
           humanOverride,
           reviewerDecision: reviewerDecisionRecord,
-          finalDecision: getClientFinalDecision(displayedResult, humanOverride, cooldownRemaining)
+          finalDecision: requiresHumanClosure && reviewerDecision.finalVerdict
+            ? `Human review submitted: ${formatReviewerVerdict(reviewerDecision.finalVerdict)}`
+            : getClientFinalDecision(displayedResult, humanOverride, cooldownRemaining)
         }
       },
       exportedAt
@@ -350,7 +489,7 @@ export default function Home() {
             </div>
           </div>
 
-          <ReviewQueue selectedCaseId={selectedCaseId} onSelectCase={loadCase} />
+          <ReviewQueue selectedCaseId={selectedCaseId} caseStatuses={caseStatuses} onSelectCase={loadCase} />
 
           <div className="flex flex-col items-start gap-2 lg:items-end">
             <div className="flex flex-wrap items-center gap-2">
@@ -390,7 +529,7 @@ export default function Home() {
                 Export
               </button>
             </div>
-            {displayedResult?.route.routeKind === "human_review" && !exportValidation.canExport ? (
+            {requiresHumanClosure && !exportValidation.canExport ? (
               <p className="text-xs font-semibold text-coral">{exportValidation.reason}</p>
             ) : null}
           </div>
@@ -410,6 +549,7 @@ export default function Home() {
           isRunning={isRunning}
           hasUnrunChanges={hasUnrunChanges}
           elapsedSeconds={elapsedSeconds}
+          forceHumanReview={manualHumanReviewActive}
         />
 
         <div
@@ -427,15 +567,21 @@ export default function Home() {
               isRunning={isRunning}
               hasUnrunChanges={hasUnrunChanges}
               elapsedSeconds={elapsedSeconds}
+              forceHumanReview={manualHumanReviewActive}
               onOpenHumanReview={() => setActiveView("human-review")}
             />
 
-            {displayedResult?.route.routeKind === "provisional_ai_decision" ? (
+            {displayedResult?.route.routeKind === "provisional_ai_decision" && !manualHumanReviewActive ? (
               <CooldownOverridePanel
                 result={displayedResult}
                 cooldownRemaining={cooldownRemaining}
+                cooldownExpiresAt={effectiveCooldownExpiresAt}
                 overridePoint={overridePoint}
+                remarkSavedAt={cooldownRemarkSavedAt}
                 onOverridePointChange={setOverridePoint}
+                onAddRemark={saveCooldownRemark}
+                onExtendCooldown={extendCooldown}
+                onOverrule={overruleCooldown}
               />
             ) : null}
 
@@ -477,9 +623,10 @@ export default function Home() {
                 isRunning={isRunning}
                 hasUnrunChanges={hasUnrunChanges}
                 elapsedSeconds={elapsedSeconds}
+                forceHumanReview={manualHumanReviewActive}
               />
 
-              {displayedResult?.route.routeKind === "human_review" ? (
+              {displayedResult && requiresHumanClosure ? (
                 <HumanReviewPanel
                   result={displayedResult}
                   caseInput={caseInput}
@@ -488,16 +635,24 @@ export default function Home() {
                   exportStatus={exportValidation}
                   savedDraftAt={savedDraftAt}
                   similarCases={similarCases}
+                  caseStatus={selectedCaseStatus}
                   onDecisionChange={updateReviewerDecision}
                   onToggleEvidence={toggleReviewerEvidence}
                   onSaveDraft={() => setSavedDraftAt(new Date().toISOString())}
+                  onEscalateSupervisor={escalateSupervisor}
+                  onSubmitCase={submitHumanReview}
                 />
               ) : displayedResult?.route.routeKind === "provisional_ai_decision" ? (
                 <CooldownOverridePanel
                   result={displayedResult}
                   cooldownRemaining={cooldownRemaining}
+                  cooldownExpiresAt={effectiveCooldownExpiresAt}
                   overridePoint={overridePoint}
+                  remarkSavedAt={cooldownRemarkSavedAt}
                   onOverridePointChange={setOverridePoint}
+                  onAddRemark={saveCooldownRemark}
+                  onExtendCooldown={extendCooldown}
+                  onOverrule={overruleCooldown}
                 />
               ) : (
                 <section className="rounded-md border border-line bg-white p-4 shadow-soft">

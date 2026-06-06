@@ -3,15 +3,22 @@
 import { ChevronDown, ListFilter } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DEMO_CASES } from "@/lib/jury/demo-cases";
-import { getQueueMeta } from "../../_lib/workspace";
+import {
+  getQueueMeta,
+  queueStatusLabels,
+  queueStatusStyles,
+  type QueueCaseStatus
+} from "../../_lib/workspace";
 
 const filters = ["High disagreement", "Needs escalation", "Policy risk", "Low confidence", "New evidence"];
 
 export function ReviewQueue({
   selectedCaseId,
+  caseStatuses,
   onSelectCase
 }: {
   selectedCaseId: string;
+  caseStatuses: Record<string, QueueCaseStatus>;
   onSelectCase: (caseId: string) => void;
 }) {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -43,9 +50,14 @@ export function ReviewQueue({
 
   const selectedIndex = Math.max(0, DEMO_CASES.findIndex((demoCase) => demoCase.id === selectedCaseId));
   const selectedCase = DEMO_CASES[selectedIndex] ?? DEMO_CASES[0];
-  const reviewedCount = selectedIndex;
-  const pendingCount = Math.max(0, DEMO_CASES.length - selectedIndex - 1);
-  const archivedCount = 0;
+  const statusCounts = DEMO_CASES.reduce<Record<QueueCaseStatus, number>>(
+    (counts, demoCase) => {
+      counts[caseStatuses[demoCase.id] ?? "pending"] += 1;
+      return counts;
+    },
+    { pending: 0, done: 0, archived: 0 }
+  );
+  const selectedStatus = caseStatuses[selectedCase.id] ?? "pending";
 
   return (
     <section className="relative z-30">
@@ -65,12 +77,30 @@ export function ReviewQueue({
             <p className="truncate text-sm font-semibold text-ink">
               {selectedIndex + 1}/{DEMO_CASES.length} · {selectedCase.title}
             </p>
+            <p className="mt-1 text-xs font-medium text-graphite">
+              {queueStatusLabels[selectedStatus]} · Pending no decision, Done cooldown/handoff, Archived closed
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-graphite lg:justify-end">
-          <span className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1">Done {reviewedCount}</span>
-          <span className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1">Pending {pendingCount}</span>
-          <span className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1">Archived {archivedCount}</span>
+          <span
+            title="Done: cooldown active, cooldown handled, or supervisor handoff."
+            className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1"
+          >
+            Done {statusCounts.done}
+          </span>
+          <span
+            title="Pending: no final reviewer action yet."
+            className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1"
+          >
+            Pending {statusCounts.pending}
+          </span>
+          <span
+            title="Archived: submitted and fully closed."
+            className="rounded-md border border-line bg-[#f5f5f5] px-2.5 py-1"
+          >
+            Archived {statusCounts.archived}
+          </span>
           <ChevronDown
             className={`h-4 w-4 text-teal transition ${isExpanded ? "rotate-180" : ""}`}
             aria-hidden="true"
@@ -86,7 +116,9 @@ export function ReviewQueue({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Review Queue</h2>
-              <p className="mt-1 text-xs text-graphite">Select the next case or filter the demo list</p>
+              <p className="mt-1 text-xs text-graphite">
+                Pending needs a decision. Done is cooldown or supervisor handoff. Archived is closed.
+              </p>
             </div>
             <ListFilter className="h-5 w-5 text-teal" aria-hidden="true" />
           </div>
@@ -113,6 +145,7 @@ export function ReviewQueue({
             {visibleCases.length ? visibleCases.map((demoCase) => {
               const meta = getQueueMeta(demoCase);
               const selected = demoCase.id === selectedCaseId;
+              const status = caseStatuses[demoCase.id] ?? "pending";
               return (
                 <button
                   key={demoCase.id}
@@ -132,9 +165,14 @@ export function ReviewQueue({
                       <p className="text-sm font-semibold leading-5">{demoCase.title}</p>
                       <p className="mt-1 text-xs text-graphite">{demoCase.id}</p>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${meta.tone}`}>
-                      {meta.priority}
-                    </span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${meta.tone}`}>
+                        {meta.priority}
+                      </span>
+                      <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${queueStatusStyles[status]}`}>
+                        {queueStatusLabels[status]}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-graphite">
                     <span>Risk: {meta.risk}</span>

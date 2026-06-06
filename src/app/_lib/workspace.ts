@@ -69,6 +69,19 @@ export const routeStyles: Record<RouteKind, string> = {
 
 export type EvidenceAliases = Record<string, string>;
 export type WorkspaceView = "hud" | "human-review" | "ai-jury";
+export type QueueCaseStatus = "pending" | "done" | "archived";
+
+export const queueStatusLabels: Record<QueueCaseStatus, string> = {
+  pending: "Pending",
+  done: "Done",
+  archived: "Archived"
+};
+
+export const queueStatusStyles: Record<QueueCaseStatus, string> = {
+  pending: "border-amber/30 bg-[#fff3d6] text-[#7a4d00]",
+  done: "border-teal/30 bg-mint text-teal",
+  archived: "border-line bg-[#f5f5f5] text-graphite"
+};
 
 export const MAX_EVIDENCE_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -314,7 +327,7 @@ export function formatReviewerVerdict(value: string) {
     case "request_more_evidence":
       return "Request more evidence";
     case "escalate":
-      return "Escalate";
+      return "Escalate supervisor";
     default:
       return "Not selected";
   }
@@ -372,7 +385,8 @@ export function buildReviewerDecisionRecord({
 export function getExportValidation(
   result: WorkflowResult | null,
   caseInput: JuryCaseInput,
-  reviewerDecision: ReviewerDecision
+  reviewerDecision: ReviewerDecision,
+  requiresHumanClosure = false
 ) {
   if (!result) {
     return {
@@ -381,7 +395,7 @@ export function getExportValidation(
     };
   }
 
-  if (result.route.routeKind !== "human_review") {
+  if (!requiresHumanClosure && result.route.routeKind !== "human_review") {
     return {
       canExport: true,
       reason: "Ready to export."

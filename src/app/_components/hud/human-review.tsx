@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FileText, Save, UserCheck, Workflow } from "lucide-react";
+import { AlertTriangle, Archive, ArrowUpCircle, CheckCircle2, FileText, Save, UserCheck, Workflow } from "lucide-react";
 import type { JuryCaseInput, WorkflowResult } from "@/types/jury";
 import {
   aliasEvidenceReferences,
@@ -7,8 +7,11 @@ import {
   formatReviewerVerdict,
   getSystemRecommendation,
   isReviewerAligned,
+  queueStatusLabels,
+  queueStatusStyles,
   routeLabels,
   type EvidenceAliases,
+  type QueueCaseStatus,
   type ReviewerDecision
 } from "../../_lib/workspace";
 
@@ -20,9 +23,12 @@ export function HumanReviewPanel({
   exportStatus,
   savedDraftAt,
   similarCases,
+  caseStatus,
   onDecisionChange,
   onToggleEvidence,
-  onSaveDraft
+  onSaveDraft,
+  onEscalateSupervisor,
+  onSubmitCase
 }: {
   result: WorkflowResult;
   caseInput: JuryCaseInput;
@@ -31,11 +37,15 @@ export function HumanReviewPanel({
   exportStatus: { canExport: boolean; reason: string };
   savedDraftAt: string;
   similarCases: JuryCaseInput[];
+  caseStatus: QueueCaseStatus;
   onDecisionChange: <K extends keyof ReviewerDecision>(key: K, value: ReviewerDecision[K]) => void;
   onToggleEvidence: (evidenceId: string) => void;
   onSaveDraft: () => void;
+  onEscalateSupervisor: () => void;
+  onSubmitCase: () => void;
 }) {
   const context = result.humanReviewContext;
+  const isArchived = caseStatus === "archived";
   const draftSaved = Boolean(
     savedDraftAt && (!reviewerDecision.updatedAt || Date.parse(savedDraftAt) >= Date.parse(reviewerDecision.updatedAt))
   );
@@ -55,16 +65,38 @@ export function HumanReviewPanel({
           <AlertTriangle className="h-5 w-5" aria-hidden="true" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-md border px-3 py-2 text-xs font-semibold ${queueStatusStyles[caseStatus]}`}>
+            {queueStatusLabels[caseStatus]}
+          </span>
           <span className="rounded-md border border-coral/30 bg-white px-3 py-2 text-xs font-semibold text-coral">
             {draftState}
           </span>
           <button
             type="button"
             onClick={onSaveDraft}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:bg-[#fff7f4]"
           >
             <Save className="h-4 w-4" aria-hidden="true" />
             Save draft
+          </button>
+          <button
+            type="button"
+            onClick={onEscalateSupervisor}
+            disabled={isArchived}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-coral/30 bg-white px-4 py-2 text-sm font-semibold text-coral transition hover:bg-[#fff7f4] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ArrowUpCircle className="h-4 w-4" aria-hidden="true" />
+            Escalate supervisor
+          </button>
+          <button
+            type="button"
+            onClick={onSubmitCase}
+            disabled={!exportStatus.canExport || isArchived}
+            title={exportStatus.canExport ? "Submit and archive this case." : exportStatus.reason}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Archive className="h-4 w-4" aria-hidden="true" />
+            Submit case
           </button>
         </div>
       </div>
@@ -91,6 +123,7 @@ export function HumanReviewPanel({
             exportStatus={exportStatus}
             savedDraftAt={savedDraftAt}
             similarCases={similarCases}
+            caseStatus={caseStatus}
           />
           <details className="rounded-md border border-coral/30 bg-white text-ink">
             <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
@@ -174,7 +207,7 @@ function ReviewerVerdictComposer({
             <option value="approve_with_note">Approve with note</option>
             <option value="reject_return">Reject with reason</option>
             <option value="request_more_evidence">Request more evidence</option>
-            <option value="escalate">Escalate</option>
+            <option value="escalate">Escalate supervisor</option>
           </select>
         </label>
 
@@ -259,7 +292,8 @@ function DecisionRecordPreview({
   reviewerDecision,
   exportStatus,
   savedDraftAt,
-  similarCases
+  similarCases,
+  caseStatus
 }: {
   result: WorkflowResult;
   caseInput: JuryCaseInput;
@@ -268,6 +302,7 @@ function DecisionRecordPreview({
   exportStatus: { canExport: boolean; reason: string };
   savedDraftAt: string;
   similarCases: JuryCaseInput[];
+  caseStatus: QueueCaseStatus;
 }) {
   const selectedEvidence = formatEvidenceList(reviewerDecision.evidenceReliedOn, evidenceAliases);
   const recommendation = getSystemRecommendation(result, caseInput);
@@ -295,6 +330,7 @@ function DecisionRecordPreview({
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <RecordMetric label="Record status" value={reasonStatus} />
+        <RecordMetric label="Case state" value={queueStatusLabels[caseStatus]} />
         <RecordMetric label="Export readiness" value={exportStatus.canExport ? "Ready" : exportStatus.reason} wide />
         <RecordMetric label="Saved state" value={savedDraftAt ? formatSavedTime(savedDraftAt) : "Not saved"} />
         <RecordMetric label="Final verdict" value={formatReviewerVerdict(reviewerDecision.finalVerdict)} />

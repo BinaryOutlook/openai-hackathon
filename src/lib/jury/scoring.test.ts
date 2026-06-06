@@ -7,6 +7,8 @@ import {
   shouldEscalate,
   summarizeVotes
 } from "@/lib/jury/scoring";
+import { MAX_DEBATE_MESSAGES_PER_AGENT } from "@/lib/jury/timing";
+import { juryRunResultSchema } from "@/types/jury";
 
 describe("jury scoring", () => {
   it("produces a decisive non-escalated verdict for the wrong-item demo case", () => {
@@ -18,6 +20,35 @@ describe("jury scoring", () => {
     expect(calculateOverallConfidence(result.opinions)).toBeGreaterThanOrEqual(0.65);
     expect(result.verdict.escalate).toBe(false);
     expect(result.verdict.decision).toBe("Approve buyer return");
+  });
+
+  it("returns a structured two-round deliberation transcript", () => {
+    const result = runMockJury(DEMO_CASES[0]);
+
+    expect(() => juryRunResultSchema.parse(result)).not.toThrow();
+    expect(result.initialOpinions).toHaveLength(7);
+    expect(result.debateTurns.length).toBeGreaterThan(result.initialOpinions.length);
+    expect(result.debateTurns.some((turn) => turn.phase === "revision")).toBe(true);
+    expect(result.debateTurns.at(-1)?.phase).toBe("consensus");
+    expect(
+      Math.max(
+        ...result.initialOpinions.map((opinion) => {
+          return result.debateTurns.filter((turn) => (
+            turn.agentId === opinion.agentId && turn.phase !== "consensus"
+          )).length;
+        })
+      )
+    ).toBeLessThanOrEqual(MAX_DEBATE_MESSAGES_PER_AGENT);
+  });
+
+  it("scores the revised final opinions rather than the opening round", () => {
+    const result = runMockJury(DEMO_CASES[0]);
+    const initialSummary = summarizeVotes(result.initialOpinions);
+    const finalSummary = summarizeVotes(result.opinions);
+
+    expect(initialSummary.support_buyer).toBeLessThan(finalSummary.support_buyer);
+    expect(result.verdict.voteSummary.support_buyer).toBe(finalSummary.support_buyer);
+    expect(result.verdict.voteSummary.support_buyer).not.toBe(initialSummary.support_buyer);
   });
 
   it("escalates when the order is high value even with strong agent confidence", () => {

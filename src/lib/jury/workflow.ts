@@ -12,7 +12,14 @@ import {
   type WorkflowResult
 } from "@/types/jury";
 
-export type JuryRunner = (caseInput: JuryCaseInput) => Promise<JuryRunResult> | JuryRunResult;
+export type JuryRunnerOptions = {
+  signal?: AbortSignal;
+};
+
+export type JuryRunner = (
+  caseInput: JuryCaseInput,
+  options?: JuryRunnerOptions
+) => Promise<JuryRunResult> | JuryRunResult;
 
 export type RunReturnWorkflowOptions = {
   juryRunner?: JuryRunner;
@@ -70,13 +77,13 @@ export async function runReturnWorkflow(
   };
 }
 
-async function defaultJuryRunner(caseInput: JuryCaseInput) {
+async function defaultJuryRunner(caseInput: JuryCaseInput, options: JuryRunnerOptions = {}) {
   if (!process.env.OPENAI_API_KEY) {
     return runMockJury(caseInput);
   }
 
   try {
-    return await runLiveJury(caseInput);
+    return await runLiveJury(caseInput, { signal: options.signal });
   } catch {
     const fallback = runMockJury(caseInput);
     return {
@@ -84,6 +91,14 @@ async function defaultJuryRunner(caseInput: JuryCaseInput) {
       deliberation: `${fallback.deliberation} Live model execution failed, so the deterministic demo jury was used for continuity.`
     };
   }
+}
+
+function buildFallbackJury(caseInput: JuryCaseInput, reason: string): JuryRunResult {
+  const fallback = runMockJury(caseInput);
+  return {
+    ...fallback,
+    deliberation: `${fallback.deliberation} ${reason}`
+  };
 }
 
 function buildHumanReviewContext(route: WorkflowResult["route"], jury: JuryRunResult) {

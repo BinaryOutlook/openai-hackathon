@@ -1,8 +1,26 @@
 import { JURY_AGENTS } from "@/lib/jury/agents";
+import { buildMockDebateTurns } from "@/lib/jury/deliberation";
 import { buildVerdict } from "@/lib/jury/scoring";
 import type { AgentOpinion, AgentVote, JuryCaseInput, JuryRunResult } from "@/types/jury";
 
 export function runMockJury(caseInput: JuryCaseInput): JuryRunResult {
+  const initialOpinions = JURY_AGENTS.map((agent): AgentOpinion => {
+    const profile = getInitialMockProfile(caseInput, agent.id);
+
+    return {
+      agentId: agent.id,
+      agentName: agent.name,
+      vote: profile.vote,
+      confidence: profile.confidence,
+      evidenceStrength: profile.evidenceStrength,
+      riskScore: profile.riskScore,
+      citedEvidenceIds: profile.citedEvidenceIds,
+      reasoning: profile.reasoning,
+      riskFlags: profile.riskFlags,
+      recommendation: profile.recommendation,
+      promptInjectionDetected: profile.promptInjectionDetected
+    };
+  });
   const opinions = JURY_AGENTS.map((agent): AgentOpinion => {
     const profile = getMockProfile(caseInput, agent.id);
 
@@ -20,11 +38,15 @@ export function runMockJury(caseInput: JuryCaseInput): JuryRunResult {
       promptInjectionDetected: profile.promptInjectionDetected
     };
   });
+  const verdict = buildVerdict(caseInput, opinions);
+  const debateTurns = buildMockDebateTurns(initialOpinions, opinions, verdict);
 
   return {
+    initialOpinions,
+    debateTurns,
     opinions,
-    deliberation: buildDeliberation(caseInput, opinions),
-    verdict: buildVerdict(caseInput, opinions),
+    deliberation: buildDeliberation(caseInput, initialOpinions, opinions, debateTurns.length),
+    verdict,
     mode: "mock"
   };
 }
@@ -55,6 +77,64 @@ function getMockProfile(caseInput: JuryCaseInput, agentId: string): MockProfile 
   }
 
   return wrongItemProfile(agentId);
+}
+
+function getInitialMockProfile(caseInput: JuryCaseInput, agentId: string): MockProfile {
+  const finalProfile = getMockProfile(caseInput, agentId);
+
+  if (caseInput.id.includes("wrong") && agentId === "packaging-logistics") {
+    return profile(
+      "need_more_evidence",
+      0.67,
+      0.74,
+      0.2,
+      ["E1"],
+      "The buyer-side mismatch looks plausible, but I want another agent to confirm whether the order record and visible package label are enough without seller warehouse proof.",
+      ["Seller packing record not provided."],
+      "Ask whether the policy and evidence agents see enough proof to approve without waiting for seller packing logs."
+    );
+  }
+
+  if (caseInput.id.includes("damaged") && agentId === "fraud-risk") {
+    return profile(
+      "need_more_evidence",
+      0.62,
+      0.68,
+      0.4,
+      ["E1", "E2"],
+      "The damage story is credible, but I want the logistics and packaging agents to distinguish courier damage from possible after-delivery handling.",
+      ["Cost responsibility is not yet settled."],
+      "Approve buyer protection only if the delivery exception and packaging weakness align."
+    );
+  }
+
+  if (caseInput.id.includes("ambiguous") && agentId === "buyer-advocate") {
+    return profile(
+      "support_buyer",
+      0.57,
+      0.45,
+      0.24,
+      ["E1"],
+      "The buyer may genuinely be disappointed by quality, but I need the seller and evidence agents to test whether subjective preference is enough.",
+      ["Buyer concern is plausible but not objective yet."],
+      "Lean toward buyer protection if another agent can identify objective defect evidence."
+    );
+  }
+
+  if ((caseInput.id.includes("opened") || containsPromptInjection(caseInput)) && agentId === "buyer-advocate") {
+    return profile(
+      "need_more_evidence",
+      0.58,
+      0.58,
+      0.52,
+      ["E1", "E3"],
+      "The buyer deserves an appeal path, but hygiene policy and manipulation risk require the panel to verify whether a defect claim exists.",
+      ["Buyer admits trying the product."],
+      "Ask for defect evidence before supporting the buyer."
+    );
+  }
+
+  return finalProfile;
 }
 
 function wrongItemProfile(agentId: string): MockProfile {
@@ -265,12 +345,21 @@ function profile(
   };
 }
 
-function buildDeliberation(caseInput: JuryCaseInput, opinions: AgentOpinion[]) {
+function buildDeliberation(
+  caseInput: JuryCaseInput,
+  initialOpinions: AgentOpinion[],
+  opinions: AgentOpinion[],
+  debateTurnCount: number
+) {
   const buyerVotes = opinions.filter((opinion) => opinion.vote === "support_buyer").length;
   const sellerVotes = opinions.filter((opinion) => opinion.vote === "support_seller").length;
   const escalationVotes = opinions.filter((opinion) => opinion.vote === "escalate").length;
+  const changedVotes = opinions.filter((opinion) => {
+    const initial = initialOpinions.find((candidate) => candidate.agentId === opinion.agentId);
+    return initial && initial.vote !== opinion.vote;
+  }).length;
 
-  return `The jury reviewed ${caseInput.evidence.length} evidence items for "${caseInput.title}". Buyer support: ${buyerVotes}; seller support: ${sellerVotes}; escalation votes: ${escalationVotes}. The strongest recurring themes were policy eligibility, evidence quality, and whether any submitted text attempted to steer the AI instead of presenting facts.`;
+  return `The jury reviewed ${caseInput.evidence.length} evidence items for "${caseInput.title}" across ${debateTurnCount} debate turns. ${changedVotes} juror(s) revised their vote after challenge. Final buyer support: ${buyerVotes}; seller support: ${sellerVotes}; escalation votes: ${escalationVotes}. The strongest recurring themes were policy eligibility, evidence quality, and whether submitted text attempted to steer the AI instead of presenting facts.`;
 }
 
 export function containsPromptInjection(caseInput: JuryCaseInput) {

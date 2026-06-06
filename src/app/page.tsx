@@ -10,7 +10,7 @@ import {
   CooldownOverridePanel,
   EvidenceBoard,
   HumanReviewPanel,
-  ReviewerSnapshot,
+  ReviewActionStrip,
   ReviewQueue,
   VerdictPanel,
   WorkflowProgress
@@ -346,24 +346,14 @@ export default function Home() {
         >
           {activeView === "hud" ? (
             <>
-            <WorkflowProgress
-              result={displayedResult}
-              isRunning={isRunning}
-              hasUnrunChanges={hasUnrunChanges}
-              elapsedSeconds={elapsedSeconds}
-            />
-
-            <ReviewerSnapshot
+            <ReviewActionStrip
               caseInput={caseInput}
               result={displayedResult}
               isRunning={isRunning}
               hasUnrunChanges={hasUnrunChanges}
               elapsedSeconds={elapsedSeconds}
+              onOpenHumanReview={() => setActiveView("human-review")}
             />
-
-            {displayedResult?.route.routeKind === "human_review" ? (
-              <HumanReviewSummary result={displayedResult} onOpen={() => setActiveView("human-review")} />
-            ) : null}
 
             {displayedResult?.route.routeKind === "provisional_ai_decision" ? (
               <CooldownOverridePanel
@@ -489,44 +479,5 @@ export default function Home() {
         </div>
       </div>
     </main>
-  );
-}
-
-function HumanReviewSummary({
-  result,
-  onOpen
-}: {
-  result: WorkflowResult;
-  onOpen: () => void;
-}) {
-  const warningCount = result.humanReviewContext?.warnings.length ?? result.route.warnings.length;
-  const focusCount = result.humanReviewContext?.suggestedReviewFocus.length ?? 0;
-
-  return (
-    <section className="rounded-md border border-coral/30 bg-[#fce8e6] p-4 text-coral shadow-soft">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <UserCheck className="h-5 w-5" aria-hidden="true" />
-            <h2 className="text-base font-semibold">Human Review Required</h2>
-          </div>
-          <p className="mt-2 text-sm leading-6">
-            {result.route.routingReason}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08]"
-        >
-          <UserCheck className="h-4 w-4" aria-hidden="true" />
-          Open Human Review
-        </button>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-        <span className="rounded-md border border-coral/30 bg-white px-2.5 py-1">Warnings: {warningCount}</span>
-        <span className="rounded-md border border-coral/30 bg-white px-2.5 py-1">Review focus: {focusCount}</span>
-      </div>
-    </section>
   );
 }

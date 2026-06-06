@@ -85,6 +85,21 @@ export const agentOpinionSchema = z.object({
 
 export type AgentOpinion = z.infer<typeof agentOpinionSchema>;
 
+export const agentDebateTurnSchema = z.object({
+  id: z.string().min(1),
+  phase: z.enum(["opening", "challenge", "revision", "consensus"]),
+  agentId: z.string().min(1),
+  agentName: z.string().min(1),
+  message: z.string().min(1),
+  vote: agentVoteSchema,
+  confidence: z.number().min(0).max(1),
+  citedEvidenceIds: z.array(z.string()).default([]),
+  replyToAgentIds: z.array(z.string()).default([]),
+  stanceChange: z.enum(["held", "softened", "strengthened", "changed", "consensus"]).default("held")
+});
+
+export type AgentDebateTurn = z.infer<typeof agentDebateTurnSchema>;
+
 export const finalVerdictSchema = z.object({
   decision: z.string().min(1),
   refundType: z.string().min(1),
@@ -106,6 +121,8 @@ export const finalVerdictSchema = z.object({
 export type FinalVerdict = z.infer<typeof finalVerdictSchema>;
 
 export const juryRunResultSchema = z.object({
+  initialOpinions: z.array(agentOpinionSchema),
+  debateTurns: z.array(agentDebateTurnSchema),
   opinions: z.array(agentOpinionSchema),
   deliberation: z.string().min(1),
   verdict: finalVerdictSchema,

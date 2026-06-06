@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEMO_CASES } from "@/lib/jury/demo-cases";
 import { runMockJury } from "@/lib/jury/mock";
 import { PROVISIONAL_DECISION_COOLDOWN_SECONDS } from "@/lib/jury/routing";
+import { MAX_DEBATE_MESSAGES_PER_AGENT } from "@/lib/jury/timing";
 import { runReturnWorkflow, type JuryRunner } from "@/lib/jury/workflow";
 
 const NOW = new Date("2026-06-01T12:00:00.000Z");
@@ -20,6 +21,8 @@ describe("return workflow", () => {
     expect(calls).toBe(0);
     expect(result.route.routeKind).toBe("standard_automation");
     expect(result.jury).toBeNull();
+    expect(result.provisionalDecision).toBeUndefined();
+    expect(result.humanReviewContext).toBeUndefined();
     expect(result.audit.juryMode).toBe("not_run");
     expect(result.audit.evidenceIds).toEqual(["E1", "E2"]);
     expect(result.audit.finalDecision).toContain("seller consent");
@@ -37,6 +40,8 @@ describe("return workflow", () => {
     expect(calls).toBe(1);
     expect(result.route.routeKind).toBe("human_review");
     expect(result.jury?.mode).toBe("mock");
+    expect(result.jury?.initialOpinions).toHaveLength(7);
+    expect(result.jury?.debateTurns.some((turn) => turn.phase === "consensus")).toBe(true);
     expect(result.humanReviewContext?.warnings).toContain("Prompt injection attempt");
     expect(result.audit.finalDecision).toBe("Human reviewer owns the final decision.");
   });
@@ -84,6 +89,24 @@ describe("return workflow", () => {
     expect(result.provisionalDecision?.cooldownSeconds).toBe(PROVISIONAL_DECISION_COOLDOWN_SECONDS);
     expect(result.provisionalDecision?.expiresAt).toBe("2026-06-01T12:01:00.000Z");
     expect(result.audit.verdict?.decision).toBe("Approve buyer return");
+  });
+
+  it("keeps the debate transcript to at most two messages per agent before consensus", async () => {
+    const result = await runReturnWorkflow(demoCase("case-wrong-item"), {
+      now: NOW,
+      juryRunner: (caseInput) => runMockJury(caseInput)
+    });
+    const messageCounts = new Map<string, number>();
+
+    for (const turn of result.jury?.debateTurns ?? []) {
+      if (turn.phase !== "consensus") {
+        messageCounts.set(turn.agentId, (messageCounts.get(turn.agentId) ?? 0) + 1);
+      }
+    }
+
+    expect(MAX_DEBATE_MESSAGES_PER_AGENT).toBe(2);
+    expect(Math.max(...messageCounts.values())).toBeLessThanOrEqual(MAX_DEBATE_MESSAGES_PER_AGENT);
+    expect(result.jury?.debateTurns.at(-1)?.phase).toBe("consensus");
   });
 });
 

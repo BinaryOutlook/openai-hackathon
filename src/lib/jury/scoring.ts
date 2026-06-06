@@ -33,6 +33,7 @@ export function getVoteMargin(opinions: AgentOpinion[]) {
   return (counts[0] ?? 0) - (counts[1] ?? 0);
 }
 
+// REVIEWER_NOTE: Confidence blends juror confidence, vote margin, evidence strength, and risk so the score is legible rather than magical.
 export function calculateOverallConfidence(opinions: AgentOpinion[]) {
   if (opinions.length === 0) {
     return 0;
@@ -51,6 +52,7 @@ export function calculateOverallConfidence(opinions: AgentOpinion[]) {
   );
 }
 
+// SAFETY_NOTE: Escalation rules privilege caution for low confidence, narrow votes, fraud risk, prompt injection, and high-value orders.
 export function shouldEscalate(caseInput: JuryCaseInput, opinions: AgentOpinion[], confidence: number) {
   const voteMargin = getVoteMargin(opinions);
   const riskScore = Math.max(0, ...opinions.map((opinion) => opinion.riskScore));

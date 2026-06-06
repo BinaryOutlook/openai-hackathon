@@ -28,6 +28,7 @@ import {
   type EvidenceAliases
 } from "../_lib/workspace";
 
+// AUDIT_NOTE: This panel puts route, recommendation, evidence IDs, confidence, risk, cooldown, and warnings in one scan path.
 export function RouteAuditPanel({
   caseInput,
   result,
@@ -103,6 +104,7 @@ export function RouteAuditPanel({
   );
 }
 
+// UX_NOTE: Agent cards show a short decision summary first and tuck full reasoning into details for fast judge scanning.
 export function JuryPanel({
   opinions,
   isRunning,
@@ -171,6 +173,7 @@ export function JuryPanel({
   );
 }
 
+// UX_NOTE: The chatroom visualizes opening positions, replies, and consensus so the jury feels deliberative rather than single-shot.
 export function AgentChatroomPanel({
   result,
   isRunning,

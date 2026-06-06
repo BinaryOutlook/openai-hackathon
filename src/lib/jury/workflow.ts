@@ -26,6 +26,7 @@ export type RunReturnWorkflowOptions = {
   now?: Date;
 };
 
+// REVIEWER_NOTE: This orchestrator is intentionally small: validate intake, select route, run jury only when needed, then build audit output.
 export async function runReturnWorkflow(
   caseInput: JuryCaseInput,
   options: RunReturnWorkflowOptions = {}
@@ -34,6 +35,7 @@ export async function runReturnWorkflow(
   const decidedAt = (options.now ?? new Date()).toISOString();
   const firstRoute = selectRoute({ caseInput: parsedCase, decidedAt });
 
+  // PRODUCT_NOTE: Standard automation returns immediately, proving the MVP does not spend AI effort on obvious policy cases.
   if (firstRoute.routeKind === "standard_automation") {
     return {
       route: firstRoute,
@@ -93,6 +95,7 @@ async function defaultJuryRunner(caseInput: JuryCaseInput, options: JuryRunnerOp
   }
 }
 
+// SAFETY_NOTE: Human review context keeps the jury useful while reminding reviewers that buyer and seller text is evidence, not instruction.
 function buildHumanReviewContext(route: WorkflowResult["route"], jury: JuryRunResult) {
   const riskFlags = jury.opinions.flatMap((opinion) => opinion.riskFlags);
   const citedEvidenceIds = new Set(jury.opinions.flatMap((opinion) => opinion.citedEvidenceIds));

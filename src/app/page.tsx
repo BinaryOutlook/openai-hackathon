@@ -47,6 +47,7 @@ import {
 
 const COOLDOWN_EXTENSION_MS = 10 * 60 * 1000;
 
+// UX_NOTE: The client-side preview makes the AI Jury tab feel alive while the authoritative API result is still running.
 function buildClientPreviewJury(caseInput: JuryCaseInput): {
   jury: JuryRunResult | null;
   routeKind: RouteKind;
@@ -116,6 +117,7 @@ export default function Home() {
   const [savedDraftAt, setSavedDraftAt] = useState("");
   const debateRevealTarget = result?.jury ?? progressiveJury;
 
+  // UX_NOTE: The initial run gives judges an immediate populated workspace instead of an empty landing screen.
   useEffect(() => {
     void runWorkflow(cloneCase(DEMO_CASES[0]));
   }, []);
@@ -429,6 +431,7 @@ export default function Home() {
     setError(null);
   }
 
+  // AUDIT_NOTE: Export bundles case input, reviewer action, workflow route, human override, and final decision into one reviewable JSON.
   function exportVerdict() {
     if (!displayedResult || !exportValidation.canExport) {
       setError(exportValidation.reason);

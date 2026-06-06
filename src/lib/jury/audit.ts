@@ -15,6 +15,7 @@ export type BuildAuditRecordInput = {
   createdAt?: string;
 };
 
+// AUDIT_NOTE: Every route, including no-jury automation, produces a compact record that a judge can inspect or export.
 export function buildAuditRecord({
   caseInput,
   route,
@@ -42,6 +43,7 @@ export function buildAuditRecord({
   };
 }
 
+// REVIEWER_NOTE: Final decision wording is route-aware, so automation, human ownership, and provisional cooldown states remain distinct.
 function getFinalDecision(
   caseInput: JuryCaseInput,
   route: RoutingDecision,

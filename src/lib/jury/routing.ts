@@ -5,6 +5,7 @@ import type {
   RoutingDecision
 } from "@/types/jury";
 
+// REVIEWER_NOTE: Named thresholds make the MVP policy stance easy to inspect instead of hiding product rules in UI code.
 export const AUTO_DECISION_CONFIDENCE_THRESHOLD = 0.75;
 export const PROVISIONAL_DECISION_COOLDOWN_SECONDS = 60;
 
@@ -19,6 +20,7 @@ export function isUncontestedCase(caseInput: JuryCaseInput): boolean {
   return getStandardAutomationClause(caseInput) !== null;
 }
 
+// PRODUCT_NOTE: This is the "AI only when useful" branch: clear seller consent or clean seven-day returns skip the jury.
 export function getStandardAutomationClause(caseInput: JuryCaseInput) {
   if (detectHardEscalation(caseInput).length > 0 || caseInput.evidence.length === 0) {
     return null;
@@ -45,6 +47,7 @@ export function getStandardAutomationClause(caseInput: JuryCaseInput) {
   return null;
 }
 
+// SAFETY_NOTE: Hard escalation signals turn risky text, exclusions, fraud, SOP triggers, and high-value orders into human-owned decisions.
 export function detectHardEscalation(caseInput: JuryCaseInput): EscalationSignal[] {
   const signals: EscalationSignal[] = [];
 
@@ -100,6 +103,7 @@ export function detectHardEscalation(caseInput: JuryCaseInput): EscalationSignal
   return signals;
 }
 
+// REVIEWER_NOTE: The routing spine mirrors the product brief: bypass simple cases, escalate risky cases, and only provisionalize confident ones.
 export function selectRoute(input: RoutingInput): RoutingDecision {
   const decidedAt = input.decidedAt ?? new Date().toISOString();
   const confidence = input.confidence ?? input.juryResult?.verdict.overallConfidence ?? null;

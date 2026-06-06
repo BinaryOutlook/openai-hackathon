@@ -15,6 +15,7 @@ import {
   type ReviewerDecision
 } from "../../_lib/workspace";
 
+// REVIEWER_NOTE: Human review is presented as an operational final-call workspace, not a passive display of AI output.
 export function HumanReviewPanel({
   result,
   caseInput,

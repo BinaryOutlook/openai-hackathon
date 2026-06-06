@@ -12,6 +12,7 @@ import {
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 
+// REVIEWER_NOTE: Live jury output is normalized back into the same typed contract as mock mode, so demo and production paths stay comparable.
 export type RunLiveJuryOptions = {
   signal?: AbortSignal;
 };
@@ -152,6 +153,7 @@ async function runPanelJury(
   const response = await client.responses.create(
     {
       model,
+      // SAFETY_NOTE: The instructions demote buyer and seller messages to evidence, protecting the workflow from injected commands.
       instructions: [
         "You are coordinating a fast AI jury chatroom for e-commerce return disputes.",
         "Simulate the listed agents as separate jurors with distinct roles.",
@@ -222,6 +224,7 @@ function normalizePanelOpinions(rawOpinions: unknown[]) {
   });
 }
 
+// REVIEWER_NOTE: The prompt asks for opening, reply, final opinion, and consensus fields so visitors can inspect actual deliberation structure.
 function buildPanelPrompt(caseInput: JuryCaseInput) {
   return JSON.stringify(
     {

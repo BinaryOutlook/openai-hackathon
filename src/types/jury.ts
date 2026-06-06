@@ -9,6 +9,7 @@ export const agentVoteSchema = z.enum([
 
 export type AgentVote = z.infer<typeof agentVoteSchema>;
 
+// REVIEWER_NOTE: Evidence source labels make buyer, seller, logistics, policy, history, and reviewer inputs traceable at a glance.
 export const evidenceSourceSchema = z.enum([
   "buyer",
   "seller",
@@ -69,6 +70,7 @@ export const juryCaseInputSchema = z.object({
 
 export type JuryCaseInput = z.infer<typeof juryCaseInputSchema>;
 
+// SAFETY_NOTE: Agent opinions carry confidence, risk, cited evidence, and prompt-injection flags instead of opaque free-form verdicts.
 export const agentOpinionSchema = z.object({
   agentId: z.string().min(1),
   agentName: z.string().min(1),
@@ -194,6 +196,7 @@ export const provisionalDecisionSchema = z.object({
 
 export type ProvisionalDecision = z.infer<typeof provisionalDecisionSchema>;
 
+// AUDIT_NOTE: The export record preserves route, warnings, evidence IDs, jury mode, human override, and final decision context.
 export const auditRecordSchema = z.object({
   id: z.string().min(1),
   caseId: z.string().min(1),

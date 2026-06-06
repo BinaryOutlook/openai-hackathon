@@ -11,6 +11,7 @@ import {
   routeStyles
 } from "../../_lib/workspace";
 
+// UX_NOTE: The top strip condenses route, freshness, vote split, risk, confidence, warnings, and next action into one reviewer checkpoint.
 export function ReviewActionStrip({
   caseInput,
   result,

@@ -3,8 +3,18 @@
 import { AlertTriangle, Download, Gavel, Loader2, Scale, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DEMO_CASES } from "@/lib/jury/demo-cases";
-import type { EvidenceItem, EvidenceSource, JuryCaseInput, WorkflowResult } from "@/types/jury";
-import { DeliberationPanel, JuryPanel, RouteAuditPanel, SimilarPastCases } from "./_components/ai-jury";
+import { runMockJury } from "@/lib/jury/mock";
+import { selectRoute } from "@/lib/jury/routing";
+import { DEBATE_TURN_REVEAL_INTERVAL_MS } from "@/lib/jury/timing";
+import type {
+  EvidenceItem,
+  EvidenceSource,
+  JuryCaseInput,
+  JuryRunResult,
+  RouteKind,
+  WorkflowResult
+} from "@/types/jury";
+import { AgentChatroomPanel, DeliberationPanel, RouteAuditPanel, SimilarPastCases } from "./_components/ai-jury";
 import {
   CaseIntake,
   CooldownOverridePanel,
@@ -33,6 +43,29 @@ import {
   type WorkspaceView
 } from "./_lib/workspace";
 
+function buildClientPreviewJury(caseInput: JuryCaseInput): {
+  jury: JuryRunResult | null;
+  routeKind: RouteKind;
+} {
+  const decidedAt = new Date().toISOString();
+  const firstRoute = selectRoute({ caseInput, decidedAt });
+
+  if (!firstRoute.requiresJury) {
+    return {
+      jury: null,
+      routeKind: firstRoute.routeKind
+    };
+  }
+
+  const jury = runMockJury(caseInput);
+  const finalRoute = selectRoute({ caseInput, juryResult: jury, decidedAt });
+
+  return {
+    jury,
+    routeKind: finalRoute.routeKind
+  };
+}
+
 export default function Home() {
   const [caseInput, setCaseInput] = useState<JuryCaseInput>(() => cloneCase(DEMO_CASES[0]));
   const [selectedCaseId, setSelectedCaseId] = useState(DEMO_CASES[0].id);
@@ -46,11 +79,15 @@ export default function Home() {
   const [hasUnrunChanges, setHasUnrunChanges] = useState(false);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [progressiveJury, setProgressiveJury] = useState<JuryRunResult | null>(null);
+  const [progressiveRouteKind, setProgressiveRouteKind] = useState<RouteKind | undefined>();
+  const [visibleDebateTurnCount, setVisibleDebateTurnCount] = useState(0);
   const [activeView, setActiveView] = useState<WorkspaceView>("hud");
   const [reviewerDecision, setReviewerDecision] = useState<ReviewerDecision>(() =>
     buildDefaultReviewerDecision(DEMO_CASES[0])
   );
   const [savedDraftAt, setSavedDraftAt] = useState("");
+  const debateRevealTarget = result?.jury ?? progressiveJury;
 
   useEffect(() => {
     void runWorkflow(cloneCase(DEMO_CASES[0]));
@@ -89,6 +126,26 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [isRunning, runStartedAt]);
 
+  useEffect(() => {
+    if (!debateRevealTarget || visibleDebateTurnCount === 0) {
+      return;
+    }
+
+    const totalTurns = debateRevealTarget.debateTurns.length;
+
+    if (visibleDebateTurnCount >= totalTurns) {
+      return;
+    }
+
+    setVisibleDebateTurnCount((current) => Math.max(1, Math.min(current || 1, totalTurns)));
+
+    const timer = window.setInterval(() => {
+      setVisibleDebateTurnCount((current) => Math.min(current + 1, totalTurns));
+    }, DEBATE_TURN_REVEAL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [debateRevealTarget, visibleDebateTurnCount]);
+
   const evidenceSummary = useMemo(() => {
     return caseInput.evidence.reduce<Record<EvidenceItem["kind"], number>>(
       (summary, evidence) => {
@@ -102,6 +159,13 @@ export default function Home() {
   const evidenceAliases = useMemo(() => buildEvidenceAliases(caseInput.evidence), [caseInput.evidence]);
   const similarCases = useMemo(() => getSimilarPastCases(caseInput), [caseInput]);
   const displayedResult = isRunning || hasUnrunChanges ? null : result;
+  const displayedJury = displayedResult?.jury ?? (isRunning ? progressiveJury : null);
+  const displayedRouteKind = displayedResult?.route.routeKind ?? (isRunning ? progressiveRouteKind : undefined);
+  const isDebateRevealing = Boolean(
+    displayedJury &&
+      visibleDebateTurnCount > 0 &&
+      visibleDebateTurnCount < displayedJury.debateTurns.length
+  );
   const exportValidation = useMemo(
     () => getExportValidation(displayedResult, caseInput, reviewerDecision),
     [caseInput, displayedResult, reviewerDecision]
@@ -109,6 +173,8 @@ export default function Home() {
 
   async function runWorkflow(input = caseInput) {
     const inputSnapshot = cloneCase(input);
+    const preview = buildClientPreviewJury(inputSnapshot);
+
     setIsRunning(true);
     setError(null);
     setResult(null);
@@ -116,6 +182,9 @@ export default function Home() {
     setElapsedSeconds(0);
     setRunStartedAt(Date.now());
     setHasUnrunChanges(false);
+    setProgressiveRouteKind(preview.routeKind);
+    setProgressiveJury(preview.jury);
+    setVisibleDebateTurnCount(preview.jury ? 1 : 0);
 
     try {
       const response = await fetch("/api/jury/run", {
@@ -137,9 +206,12 @@ export default function Home() {
       setSavedDraftAt("");
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Unable to run workflow.");
+      setVisibleDebateTurnCount(0);
     } finally {
       setIsRunning(false);
       setRunStartedAt(null);
+      setProgressiveJury(null);
+      setProgressiveRouteKind(undefined);
     }
   }
 
@@ -158,6 +230,9 @@ export default function Home() {
     setHasUnrunChanges(true);
     setResult(null);
     setCooldownRemaining(0);
+    setProgressiveJury(null);
+    setProgressiveRouteKind(undefined);
+    setVisibleDebateTurnCount(0);
   }
 
   function updateCase<K extends keyof JuryCaseInput>(key: K, value: JuryCaseInput[K]) {
@@ -449,17 +524,22 @@ export default function Home() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px] 2xl:grid-cols-[minmax(0,1.45fr)_460px]">
               <div className="grid gap-4">
-                <DeliberationPanel
-                  result={displayedResult?.jury ?? null}
-                  routeKind={displayedResult?.route.routeKind}
-                  caseInput={caseInput}
-                  evidenceAliases={evidenceAliases}
-                />
-                <JuryPanel
-                  opinions={displayedResult?.jury?.opinions ?? []}
+                {displayedResult ? (
+                  <DeliberationPanel
+                    result={displayedResult.jury}
+                    routeKind={displayedResult.route.routeKind}
+                    caseInput={caseInput}
+                    evidenceAliases={evidenceAliases}
+                  />
+                ) : null}
+                <AgentChatroomPanel
+                  result={displayedJury}
                   isRunning={isRunning}
-                  routeKind={displayedResult?.route.routeKind}
+                  isPreview={isRunning}
+                  isRevealing={isDebateRevealing}
+                  routeKind={displayedRouteKind}
                   evidenceAliases={evidenceAliases}
+                  visibleTurnCount={visibleDebateTurnCount || undefined}
                 />
               </div>
               <div className="grid gap-4 xl:sticky xl:top-4 xl:self-start">

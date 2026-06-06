@@ -50,6 +50,10 @@ function getMockProfile(caseInput: JuryCaseInput, agentId: string): MockProfile 
     return damagedDeliveryProfile(agentId);
   }
 
+  if (caseInput.id.includes("ambiguous")) {
+    return ambiguousQualityProfile(agentId);
+  }
+
   return wrongItemProfile(agentId);
 }
 
@@ -80,11 +84,50 @@ function wrongItemProfile(agentId: string): MockProfile {
     "need_more_evidence",
     0.64,
     0.72,
-    0.24,
+    0.16,
     ["E1"],
     "The buyer's image is persuasive, but seller-side warehouse proof is missing from the current file.",
     ["Seller packing record not provided."],
     "Approve if the shipping label is confirmed against the order."
+  );
+}
+
+function ambiguousQualityProfile(agentId: string): MockProfile {
+  if (agentId === "buyer-advocate" || agentId === "policy-judge") {
+    return profile(
+      "need_more_evidence",
+      0.56,
+      0.44,
+      0.22,
+      ["E1", "E2"],
+      "The buyer may have a legitimate quality concern, but the current evidence is subjective and lacks a close-up photo or material tag.",
+      ["Material defect is not yet proven."],
+      "Ask for clearer product photos and the care label before deciding."
+    );
+  }
+
+  if (agentId === "seller-advocate" || agentId === "evidence-sentinel") {
+    return profile(
+      "support_seller",
+      0.58,
+      0.48,
+      0.2,
+      ["E2"],
+      "The listing policy requires stronger defect evidence than the buyer has provided so far.",
+      ["Evidence is thin for automatic approval."],
+      "Request additional evidence rather than auto-approve the return."
+    );
+  }
+
+  return profile(
+    "need_more_evidence",
+    0.52,
+    0.4,
+    0.28,
+    ["E1"],
+    "The case is plausible but ambiguous, and neither party has supplied enough evidence for a confident automated outcome.",
+    ["Low evidence strength."],
+    "Route to human review if the buyer cannot add objective defect evidence."
   );
 }
 

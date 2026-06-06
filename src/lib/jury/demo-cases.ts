@@ -48,6 +48,8 @@ export const DEMO_CASES: JuryCaseInput[] = [
     returnType: "Wrong item sent",
     productTitle: "AeroHeat Smart Electric Kettle, matte white",
     category: "Small home appliance",
+    requestReason: "color_style_model_mismatch",
+    sellerAgreesToReturn: false,
     orderValue: 89,
     orderDate: "2026-05-18",
     deliveryDate: "2026-05-23",
@@ -75,6 +77,7 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E1",
         label: "Buyer photo: product and label",
+        source: "buyer",
         kind: "image",
         summary: "Photo shows a hair dryer box beside shipping label for the kettle order.",
         imageDataUrl: evidenceImage("wrong-item")
@@ -82,12 +85,14 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E2",
         label: "Order record",
+        source: "platform_policy",
         kind: "text",
         summary: "Order record lists AeroHeat Smart Electric Kettle SKU KTL-WH-042."
       },
       {
         id: "E3",
         label: "Seller history",
+        source: "history",
         kind: "history",
         summary: "Recent seller complaints mention wrong small-appliance SKU shipments."
       }
@@ -99,6 +104,8 @@ export const DEMO_CASES: JuryCaseInput[] = [
     returnType: "Product damaged during delivery",
     productTitle: "LumaStone ceramic desk lamp",
     category: "Home decor",
+    requestReason: "damaged_or_dirty_item",
+    sellerAgreesToReturn: false,
     orderValue: 142,
     orderDate: "2026-05-11",
     deliveryDate: "2026-05-16",
@@ -126,6 +133,7 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E1",
         label: "Buyer photo: crushed box",
+        source: "buyer",
         kind: "image",
         summary: "Outer box corner is crushed and matches the side where lamp base is cracked.",
         imageDataUrl: evidenceImage("damaged-box")
@@ -133,12 +141,14 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E2",
         label: "Courier exception",
+        source: "logistics",
         kind: "logistics",
         summary: "Sorting center recorded container compression before final delivery."
       },
       {
         id: "E3",
         label: "Seller packing note",
+        source: "seller",
         kind: "text",
         summary: "Seller used single-box foam packaging for a fragile ceramic item."
       }
@@ -150,6 +160,8 @@ export const DEMO_CASES: JuryCaseInput[] = [
     returnType: "Seven-day no-reason return, product opened or used",
     productTitle: "ClearDew Retinol Night Serum",
     category: "Cosmetics and personal care",
+    requestReason: "do_not_want_anymore",
+    sellerAgreesToReturn: false,
     orderValue: 64,
     orderDate: "2026-05-21",
     deliveryDate: "2026-05-25",
@@ -175,6 +187,7 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E1",
         label: "Buyer photo: broken seal",
+        source: "buyer",
         kind: "image",
         summary: "Serum package seal is visibly opened and pump appears used.",
         imageDataUrl: evidenceImage("opened-seal")
@@ -182,14 +195,106 @@ export const DEMO_CASES: JuryCaseInput[] = [
       {
         id: "E2",
         label: "Category policy",
+        source: "platform_policy",
         kind: "policy",
         summary: "Opened cosmetics are restricted unless defect or mismatch is proven."
       },
       {
         id: "E3",
         label: "Chat admission",
+        source: "buyer",
         kind: "text",
         summary: "Buyer says they tried one pump before requesting a no-reason return."
+      }
+    ]
+  },
+  {
+    id: "case-uncontested-no-reason",
+    title: "Uncontested seven-day no-reason return: sealed backpack",
+    returnType: "Seven-day no-reason return, sealed and resellable",
+    productTitle: "Northline commuter backpack, graphite",
+    category: "Bags and travel",
+    requestReason: "do_not_want_anymore",
+    sellerAgreesToReturn: true,
+    orderValue: 58,
+    orderDate: "2026-05-24",
+    deliveryDate: "2026-05-27",
+    returnRequestDate: "2026-05-29",
+    policyText:
+      "Seven-day no-reason returns are eligible for standard platform automation when goods are sealed, unused, in scope, and requested within seven days of delivery.",
+    buyerClaim:
+      "I changed my mind and want to return the backpack. The product is unused, tags are attached, and the packaging is intact.",
+    sellerResponse:
+      "Seller accepts the return under the seven-day no-reason window once the platform label is issued.",
+    chatHistory: [
+      "Buyer: I no longer need the backpack.",
+      "Seller: The request is in the allowed return window."
+    ],
+    logisticsEvents: [
+      "2026-05-27 12:20 Delivered to buyer.",
+      "2026-05-29 08:15 Return request submitted."
+    ],
+    buyerHistory: "Buyer has 1 routine return across 30 orders and no risk indicators.",
+    sellerHistory: "Seller has normal returns operations and no active policy restrictions.",
+    evidence: [
+      {
+        id: "E1",
+        label: "Return window check",
+        source: "platform_policy",
+        kind: "policy",
+        summary: "Request was submitted two days after delivery for an eligible sealed item."
+      },
+      {
+        id: "E2",
+        label: "Seller acceptance",
+        source: "seller",
+        kind: "text",
+        summary: "Seller agrees the return can follow standard platform automation."
+      }
+    ]
+  },
+  {
+    id: "case-ambiguous-quality",
+    title: "Ambiguous quality complaint: linen shirt texture",
+    returnType: "Quality issue with subjective evidence",
+    productTitle: "Aster linen overshirt, natural white",
+    category: "Apparel",
+    requestReason: "quality_issue",
+    sellerAgreesToReturn: false,
+    orderValue: 76,
+    orderDate: "2026-05-19",
+    deliveryDate: "2026-05-24",
+    returnRequestDate: "2026-05-26",
+    policyText:
+      "Quality complaints may be approved when evidence shows a defect or material mismatch. Subjective preference claims require stronger evidence before an automatic decision.",
+    buyerClaim:
+      "The shirt feels rougher than expected and does not look as premium as the product page photos.",
+    sellerResponse:
+      "The shirt uses the listed linen blend. We request clearer photos or a material tag image before accepting a defect return.",
+    chatHistory: [
+      "Buyer: The texture feels scratchy.",
+      "Seller: Please upload the care label and close-up fabric photo."
+    ],
+    logisticsEvents: [
+      "2026-05-24 16:02 Delivered to buyer.",
+      "2026-05-26 10:44 Return request submitted."
+    ],
+    buyerHistory: "Buyer has 3 returns across 42 orders with no operations warnings.",
+    sellerHistory: "Seller has normal apparel quality metrics for this category.",
+    evidence: [
+      {
+        id: "E1",
+        label: "Buyer description",
+        source: "buyer",
+        kind: "text",
+        summary: "Buyer reports rough texture but has not provided a material tag or close-up image."
+      },
+      {
+        id: "E2",
+        label: "Listing policy",
+        source: "platform_policy",
+        kind: "policy",
+        summary: "Subjective preference alone is insufficient for automatic defect approval."
       }
     ]
   }

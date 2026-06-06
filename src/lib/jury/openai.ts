@@ -171,6 +171,7 @@ function buildCasePrompt(caseInput: JuryCaseInput, agent: JuryAgent) {
         evidence: caseInput.evidence.map((evidence) => ({
           id: evidence.id,
           label: evidence.label,
+          source: evidence.source,
           kind: evidence.kind,
           summary: evidence.summary,
           hasImage: Boolean(evidence.imageDataUrl)

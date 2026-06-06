@@ -31,7 +31,7 @@ export function CaseIntake({
     "resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 disabled:bg-[#f5f5f5] disabled:text-graphite";
 
   return (
-    <section className="rounded-md border border-line bg-white p-4 shadow-soft xl:max-h-[max(24rem,calc(100vh-32rem))] xl:overflow-y-auto">
+    <section className="rounded-md border border-line bg-white p-4 shadow-soft">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Case Intake</h2>

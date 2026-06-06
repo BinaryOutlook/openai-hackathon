@@ -33,7 +33,7 @@ export function VerdictPanel({
   const standardDecision = getStandardAutomationDecision(caseInput);
 
   return (
-    <section className="rounded-md border border-line bg-white p-4 shadow-soft xl:max-h-[max(24rem,calc(100vh-32rem))] xl:overflow-y-auto">
+    <section className="rounded-md border border-line bg-white p-4 shadow-soft">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">{isStandardAutomation ? "Automation" : "Verdict Workspace"}</h2>
         {result?.route.routeKind === "human_review" || verdict?.escalate ? (

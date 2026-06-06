@@ -20,7 +20,7 @@ export function EvidenceBoard({
   );
 
   return (
-    <section className="rounded-md border border-line bg-white p-4 shadow-soft">
+    <section className="rounded-md border border-line bg-white p-4 shadow-soft xl:max-h-[max(24rem,calc(100vh-32rem))] xl:overflow-y-auto">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Evidence Board</h2>

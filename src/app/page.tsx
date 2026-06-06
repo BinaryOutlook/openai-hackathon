@@ -50,6 +50,7 @@ export default function Home() {
   const [reviewerDecision, setReviewerDecision] = useState<ReviewerDecision>(() =>
     buildDefaultReviewerDecision(DEMO_CASES[0])
   );
+  const [savedDraftAt, setSavedDraftAt] = useState("");
 
   useEffect(() => {
     void runWorkflow(cloneCase(DEMO_CASES[0]));
@@ -133,6 +134,7 @@ export default function Home() {
       setResult(payload);
       setOverridePoint("");
       setReviewerDecision(buildDefaultReviewerDecision(inputSnapshot));
+      setSavedDraftAt("");
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Unable to run workflow.");
     } finally {
@@ -147,6 +149,7 @@ export default function Home() {
     setCaseInput(nextCase);
     setIsCaseEditable(false);
     setReviewerDecision(buildDefaultReviewerDecision(nextCase));
+    setSavedDraftAt("");
     setHasUnrunChanges(false);
     void runWorkflow(nextCase);
   }
@@ -261,7 +264,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-paper px-4 py-4 text-ink sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1880px] flex-col gap-4">
-        <header className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
+        <header className="grid gap-3 border-b border-line pb-4 lg:grid-cols-[minmax(260px,auto)_minmax(380px,1fr)_auto] lg:items-start">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-teal text-white shadow-brand">
               <Scale className="h-5 w-5" aria-hidden="true" />
@@ -271,6 +274,8 @@ export default function Home() {
               <p className="mt-1 text-sm text-graphite">Shrimp marketplace dispute operations</p>
             </div>
           </div>
+
+          <ReviewQueue selectedCaseId={selectedCaseId} onSelectCase={loadCase} />
 
           <div className="flex flex-col items-start gap-2 lg:items-end">
             <div className="flex flex-wrap items-center gap-2">
@@ -371,7 +376,6 @@ export default function Home() {
 
             <section className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px] 2xl:grid-cols-[360px_minmax(0,1.35fr)_400px]">
               <div className="grid gap-4 xl:self-start">
-                <ReviewQueue selectedCaseId={selectedCaseId} onSelectCase={loadCase} />
                 <CaseIntake
                   caseInput={caseInput}
                   uploadSource={uploadSource}
@@ -416,9 +420,12 @@ export default function Home() {
                   caseInput={caseInput}
                   evidenceAliases={evidenceAliases}
                   reviewerDecision={reviewerDecision}
+                  exportStatus={exportValidation}
+                  savedDraftAt={savedDraftAt}
                   similarCases={similarCases}
                   onDecisionChange={updateReviewerDecision}
                   onToggleEvidence={toggleReviewerEvidence}
+                  onSaveDraft={() => setSavedDraftAt(new Date().toISOString())}
                 />
               ) : displayedResult?.route.routeKind === "provisional_ai_decision" ? (
                 <CooldownOverridePanel

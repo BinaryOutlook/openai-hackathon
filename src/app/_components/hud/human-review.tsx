@@ -1,10 +1,10 @@
-import { AlertTriangle, CheckCircle2, FileText, UserCheck, Workflow } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Save, UserCheck, Workflow } from "lucide-react";
 import type { JuryCaseInput, WorkflowResult } from "@/types/jury";
-import { ReadOnlyMetric, ReviewList } from "../ui";
 import {
   aliasEvidenceReferences,
   formatEscalationTarget,
   formatEvidenceList,
+  formatReviewerVerdict,
   getSystemRecommendation,
   isReviewerAligned,
   routeLabels,
@@ -17,33 +17,64 @@ export function HumanReviewPanel({
   caseInput,
   evidenceAliases,
   reviewerDecision,
+  exportStatus,
+  savedDraftAt,
   similarCases,
   onDecisionChange,
-  onToggleEvidence
+  onToggleEvidence,
+  onSaveDraft
 }: {
   result: WorkflowResult;
   caseInput: JuryCaseInput;
   evidenceAliases: EvidenceAliases;
   reviewerDecision: ReviewerDecision;
+  exportStatus: { canExport: boolean; reason: string };
+  savedDraftAt: string;
   similarCases: JuryCaseInput[];
   onDecisionChange: <K extends keyof ReviewerDecision>(key: K, value: ReviewerDecision[K]) => void;
   onToggleEvidence: (evidenceId: string) => void;
+  onSaveDraft: () => void;
 }) {
   const context = result.humanReviewContext;
+  const draftSaved = Boolean(
+    savedDraftAt && (!reviewerDecision.updatedAt || Date.parse(savedDraftAt) >= Date.parse(reviewerDecision.updatedAt))
+  );
+  const draftState = savedDraftAt
+    ? draftSaved
+      ? `Draft saved ${formatSavedTime(savedDraftAt)}`
+      : "Unsaved changes"
+    : reviewerDecision.updatedAt
+      ? "Unsaved changes"
+      : "No draft saved";
 
   return (
     <section className="rounded-md border border-coral/30 bg-[#fce8e6] p-4 text-coral shadow-soft">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Human Review</h2>
-        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold">Human Review</h2>
+          <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md border border-coral/30 bg-white px-3 py-2 text-xs font-semibold text-coral">
+            {draftState}
+          </span>
+          <button
+            type="button"
+            onClick={onSaveDraft}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08]"
+          >
+            <Save className="h-4 w-4" aria-hidden="true" />
+            Save draft
+          </button>
+        </div>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div className="grid gap-3">
-          <ReviewList title="Indicators" items={aliasEvidenceReferences(context?.indicators ?? result.route.indicators, evidenceAliases)} />
-          <ReviewList title="Warnings" items={aliasEvidenceReferences(context?.warnings ?? result.route.warnings, evidenceAliases)} />
-          <ReviewList title="Review Focus" items={aliasEvidenceReferences(context?.suggestedReviewFocus ?? [], evidenceAliases)} />
-        </div>
+      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <ReviewSignalSummary
+          indicators={aliasEvidenceReferences(context?.indicators ?? result.route.indicators, evidenceAliases)}
+          warnings={aliasEvidenceReferences(context?.warnings ?? result.route.warnings, evidenceAliases)}
+          focus={aliasEvidenceReferences(context?.suggestedReviewFocus ?? [], evidenceAliases)}
+        />
         <ReviewerVerdictComposer
           caseInput={caseInput}
           evidenceAliases={evidenceAliases}
@@ -51,19 +82,63 @@ export function HumanReviewPanel({
           onDecisionChange={onDecisionChange}
           onToggleEvidence={onToggleEvidence}
         />
-        <div className="grid gap-4">
+        <div className="grid gap-4 xl:self-start">
           <DecisionRecordPreview
             result={result}
             caseInput={caseInput}
             evidenceAliases={evidenceAliases}
             reviewerDecision={reviewerDecision}
+            exportStatus={exportStatus}
+            savedDraftAt={savedDraftAt}
             similarCases={similarCases}
           />
-          <EscalationWorkflow reviewerDecision={reviewerDecision} />
-          <CalibrationPanel result={result} reviewerDecision={reviewerDecision} />
+          <details className="rounded-md border border-coral/30 bg-white text-ink">
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
+              Handoff and calibration
+            </summary>
+            <div className="grid gap-3 border-t border-coral/20 p-4">
+              <EscalationWorkflow reviewerDecision={reviewerDecision} />
+              <CalibrationPanel result={result} reviewerDecision={reviewerDecision} />
+            </div>
+          </details>
         </div>
       </div>
     </section>
+  );
+}
+
+function ReviewSignalSummary({
+  indicators,
+  warnings,
+  focus
+}: {
+  indicators: string[];
+  warnings: string[];
+  focus: string[];
+}) {
+  const groups = [
+    { title: "Indicators", items: indicators },
+    { title: "Warnings", items: warnings },
+    { title: "Review Focus", items: focus }
+  ];
+
+  return (
+    <div className="grid gap-3 xl:self-start">
+      {groups.map((group) => (
+        <div key={group.title} className="rounded-md border border-coral/30 bg-white p-3 text-ink">
+          <p className="text-xs font-semibold uppercase text-coral">{group.title}</p>
+          {group.items.length ? (
+            <ul className="mt-2 grid gap-1.5 text-sm leading-5 text-graphite">
+              {group.items.slice(0, 3).map((item) => (
+                <li key={item} className="[overflow-wrap:anywhere]">{limitWords(item, 12)}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm leading-5 text-graphite">No extra context.</p>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -81,7 +156,7 @@ function ReviewerVerdictComposer({
   onToggleEvidence: (evidenceId: string) => void;
 }) {
   return (
-    <div className="rounded-md border border-coral/30 bg-white p-4 text-ink">
+    <div className="rounded-md border border-coral/30 bg-white p-4 text-ink xl:self-start">
       <div className="flex items-center gap-2">
         <UserCheck className="h-4 w-4 text-teal" aria-hidden="true" />
         <h3 className="text-sm font-semibold">Reviewer Verdict Composer</h3>
@@ -107,7 +182,7 @@ function ReviewerVerdictComposer({
           Reason
           <textarea
             value={reviewerDecision.reason}
-            rows={4}
+            rows={3}
             onChange={(event) => onDecisionChange("reason", event.target.value)}
             className="resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6"
             placeholder="Write the final reviewer rationale or approval note."
@@ -141,7 +216,7 @@ function ReviewerVerdictComposer({
           Override reason
           <textarea
             value={reviewerDecision.overrideReason}
-            rows={3}
+            rows={2}
             onChange={(event) => onDecisionChange("overrideReason", event.target.value)}
             className="resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6"
             placeholder="Required if the human decision differs from the system recommendation."
@@ -166,7 +241,7 @@ function ReviewerVerdictComposer({
           Notes
           <textarea
             value={reviewerDecision.notes}
-            rows={3}
+            rows={2}
             onChange={(event) => onDecisionChange("notes", event.target.value)}
             className="resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6"
             placeholder="Handoff notes for the next reviewer or operations team."
@@ -182,16 +257,27 @@ function DecisionRecordPreview({
   caseInput,
   evidenceAliases,
   reviewerDecision,
+  exportStatus,
+  savedDraftAt,
   similarCases
 }: {
   result: WorkflowResult;
   caseInput: JuryCaseInput;
   evidenceAliases: EvidenceAliases;
   reviewerDecision: ReviewerDecision;
+  exportStatus: { canExport: boolean; reason: string };
+  savedDraftAt: string;
   similarCases: JuryCaseInput[];
 }) {
   const selectedEvidence = formatEvidenceList(reviewerDecision.evidenceReliedOn, evidenceAliases);
   const recommendation = getSystemRecommendation(result, caseInput);
+  const overrideRequired = reviewerDecision.finalVerdict
+    ? isReviewerAligned(recommendation, reviewerDecision.finalVerdict)
+      ? "Not required"
+      : reviewerDecision.overrideReason.trim()
+        ? "Provided"
+        : "Required"
+    : "Pending verdict";
   const reasonStatus = reviewerDecision.finalVerdict && !reviewerDecision.reason.trim()
     ? "Reason needed"
     : reviewerDecision.finalVerdict
@@ -207,19 +293,56 @@ function DecisionRecordPreview({
         <FileText className="h-4 w-4 text-teal" aria-hidden="true" />
         <h3 className="text-sm font-semibold">Decision Record</h3>
       </div>
-      <div className="mt-3 grid gap-2">
-        <ReadOnlyMetric label="Record status" value={reasonStatus} />
-        <ReadOnlyMetric label="System recommendation" value={recommendation} />
-        <ReadOnlyMetric label="Route" value={routeLabels[result.route.routeKind]} />
-        <ReadOnlyMetric label="Evidence relied on" value={selectedEvidence} />
-        <ReadOnlyMetric label="Similar cases" value={precedentHint} />
-        <ReadOnlyMetric
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <RecordMetric label="Record status" value={reasonStatus} />
+        <RecordMetric label="Export readiness" value={exportStatus.canExport ? "Ready" : exportStatus.reason} wide />
+        <RecordMetric label="Saved state" value={savedDraftAt ? formatSavedTime(savedDraftAt) : "Not saved"} />
+        <RecordMetric label="Final verdict" value={formatReviewerVerdict(reviewerDecision.finalVerdict)} />
+        <RecordMetric
+          label="Rationale"
+          value={reviewerDecision.reason.trim() ? `${reviewerDecision.reason.trim().length} characters` : "Missing"}
+        />
+        <RecordMetric label="Evidence count" value={`${reviewerDecision.evidenceReliedOn.length}/${caseInput.evidence.length}`} />
+        <RecordMetric label="Override reason" value={overrideRequired} />
+        <RecordMetric label="System recommendation" value={recommendation} wide />
+        <RecordMetric label="Route" value={routeLabels[result.route.routeKind]} />
+        <RecordMetric label="Evidence relied on" value={selectedEvidence} />
+        <RecordMetric label="Similar cases" value={precedentHint} wide />
+        <RecordMetric
           label="Updated"
           value={reviewerDecision.updatedAt ? new Date(reviewerDecision.updatedAt).toLocaleString() : "Not drafted"}
         />
       </div>
     </div>
   );
+}
+
+function RecordMetric({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`min-w-0 rounded-md border border-line bg-white px-2 py-2 ${wide ? "col-span-2" : ""}`}>
+      <p className="text-[0.68rem] font-semibold uppercase text-graphite">{label}</p>
+      <p className="mt-1 text-sm font-semibold leading-5 text-ink [overflow-wrap:anywhere]">{value}</p>
+    </div>
+  );
+}
+
+function formatSavedTime(value: string) {
+  return value ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Not saved";
+}
+
+function limitWords(text: string, maxWords: number) {
+  const words = text
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}...`;
 }
 
 function EscalationWorkflow({ reviewerDecision }: { reviewerDecision: ReviewerDecision }) {

@@ -5,6 +5,7 @@ import type {
   JuryRunResult,
   RoutingDecision
 } from "@/types/jury";
+import { getStandardAutomationClause } from "@/lib/jury/routing";
 
 export type BuildAuditRecordInput = {
   caseInput: JuryCaseInput;
@@ -37,11 +38,12 @@ export function buildAuditRecord({
     juryMode: jury?.mode ?? "not_run",
     verdict: jury?.verdict ?? null,
     humanOverride,
-    finalDecision: getFinalDecision(route, jury, humanOverride)
+    finalDecision: getFinalDecision(caseInput, route, jury, humanOverride)
   };
 }
 
 function getFinalDecision(
+  caseInput: JuryCaseInput,
   route: RoutingDecision,
   jury: JuryRunResult | null,
   humanOverride: HumanOverride | null
@@ -51,7 +53,8 @@ function getFinalDecision(
   }
 
   if (route.routeKind === "standard_automation") {
-    return "Standard platform automation selected; AI jury was not run.";
+    return getStandardAutomationClause(caseInput)?.finalDecision
+      ?? "Standard platform automation selected without AI jury review.";
   }
 
   if (route.routeKind === "human_review") {

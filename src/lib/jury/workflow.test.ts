@@ -22,6 +22,7 @@ describe("return workflow", () => {
     expect(result.jury).toBeNull();
     expect(result.audit.juryMode).toBe("not_run");
     expect(result.audit.evidenceIds).toEqual(["E1", "E2"]);
+    expect(result.audit.finalDecision).toContain("seller consent");
   });
 
   it("runs the jury for hard human-review routes and returns review context", async () => {

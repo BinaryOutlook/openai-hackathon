@@ -4,6 +4,7 @@ import {
   AUTO_DECISION_CONFIDENCE_THRESHOLD,
   PROVISIONAL_DECISION_COOLDOWN_SECONDS,
   detectHardEscalation,
+  getStandardAutomationClause,
   isUncontestedCase,
   selectRoute
 } from "@/lib/jury/routing";
@@ -17,6 +18,7 @@ describe("return routing", () => {
     expect(decision.routeKind).toBe("standard_automation");
     expect(decision.requiresJury).toBe(false);
     expect(decision.cooldownSeconds).toBeNull();
+    expect(getStandardAutomationClause(caseInput)?.id).toBe("seller_consent");
   });
 
   it("routes valid in-scope seven-day no-reason returns to standard automation", () => {
@@ -28,6 +30,39 @@ describe("return routing", () => {
 
     expect(isUncontestedCase(caseInput)).toBe(true);
     expect(selectRoute({ caseInput }).routeKind).toBe("standard_automation");
+    expect(getStandardAutomationClause(caseInput)?.id).toBe("seven_day_policy");
+  });
+
+  it("keeps the seven-day boundary but rejects day eight", () => {
+    const daySeven = {
+      ...demoCase("case-uncontested-no-reason"),
+      sellerAgreesToReturn: false,
+      deliveryDate: "2026-05-01",
+      returnRequestDate: "2026-05-08",
+      sellerResponse: "Seller has no objection to the platform return window."
+    };
+    const dayEight = {
+      ...daySeven,
+      returnRequestDate: "2026-05-09"
+    };
+
+    expect(isUncontestedCase(daySeven)).toBe(true);
+    expect(isUncontestedCase(dayEight)).toBe(false);
+  });
+
+  it("does not bypass the jury when evidence is missing or the seller disputes eligibility", () => {
+    const missingEvidence = {
+      ...demoCase("case-uncontested-no-reason"),
+      evidence: []
+    };
+    const sellerDispute = {
+      ...demoCase("case-uncontested-no-reason"),
+      sellerAgreesToReturn: false,
+      sellerResponse: "Seller disputes eligibility and requests proof before approving."
+    };
+
+    expect(isUncontestedCase(missingEvidence)).toBe(false);
+    expect(isUncontestedCase(sellerDispute)).toBe(false);
   });
 
   it("routes fraud, prompt injection, and return exclusions to human review", () => {
@@ -60,6 +95,27 @@ describe("return routing", () => {
 
     expect(decision.routeKind).toBe("provisional_ai_decision");
     expect(decision.cooldownSeconds).toBe(PROVISIONAL_DECISION_COOLDOWN_SECONDS);
+  });
+
+  it("allows the exact confidence threshold for provisional decisions", () => {
+    const decision = selectRoute({
+      caseInput: demoCase("case-wrong-item"),
+      confidence: AUTO_DECISION_CONFIDENCE_THRESHOLD
+    });
+
+    expect(decision.routeKind).toBe("provisional_ai_decision");
+  });
+
+  it("lets high-value risk override seller consent", () => {
+    const caseInput = {
+      ...demoCase("case-uncontested-no-reason"),
+      orderValue: 501
+    };
+    const decision = selectRoute({ caseInput });
+
+    expect(isUncontestedCase(caseInput)).toBe(false);
+    expect(decision.routeKind).toBe("human_review");
+    expect(decision.warnings).toContain("High-value item");
   });
 });
 

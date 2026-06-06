@@ -5,19 +5,30 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#17211f",
-        paper: "#f7f5ef",
-        surface: "#fffdf8",
-        line: "#ddd7c9",
-        cedar: "#6f4436",
-        teal: "#146c63",
-        mint: "#d8eee7",
-        amber: "#bb7b17",
-        coral: "#b94c3b",
-        graphite: "#4c5754"
+        ink: "#212121",
+        paper: "#ffffff",
+        surface: "#ffffff",
+        line: "#e0e0e0",
+        cedar: "#303030",
+        teal: "#ff5722",
+        mint: "#ffebe6",
+        amber: "#ffb020",
+        coral: "#d93025",
+        graphite: "#616161",
+        shrimp: {
+          orange: "#ff5722",
+          orangeHover: "#e64a19",
+          orangeActive: "#bf360c",
+          orangeTint: "#ffebe6",
+          orangeSoft: "#fff7f4",
+          mint: "#00bfa5",
+          mintSoft: "#d1f4ef",
+          charcoal: "#212121"
+        }
       },
       boxShadow: {
-        soft: "0 18px 50px rgba(23, 33, 31, 0.08)"
+        soft: "0 8px 24px rgba(33, 33, 33, 0.10)",
+        brand: "0 12px 32px rgba(255, 87, 34, 0.18)"
       }
     }
   },

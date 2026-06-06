@@ -16,15 +16,33 @@ export type RoutingInput = {
 };
 
 export function isUncontestedCase(caseInput: JuryCaseInput): boolean {
+  return getStandardAutomationClause(caseInput) !== null;
+}
+
+export function getStandardAutomationClause(caseInput: JuryCaseInput) {
   if (detectHardEscalation(caseInput).length > 0 || caseInput.evidence.length === 0) {
-    return false;
+    return null;
   }
 
   if (caseInput.sellerAgreesToReturn) {
-    return true;
+    return {
+      id: "seller_consent",
+      title: "Return/refund eligible by seller consent",
+      routingReason: "Seller consent supports standard platform return/refund automation without AI jury review.",
+      finalDecision: "Return/refund eligible by seller consent. Standard platform automation selected without AI jury review."
+    };
   }
 
-  return isValidSevenDayNoReasonReturn(caseInput) && !hasSellerDispute(caseInput);
+  if (isValidSevenDayNoReasonReturn(caseInput) && !hasSellerDispute(caseInput)) {
+    return {
+      id: "seven_day_policy",
+      title: "Return/refund eligible under seven-day policy",
+      routingReason: "The request is an in-scope seven-day no-reason return, so standard policy automation applies without AI jury review.",
+      finalDecision: "Return/refund eligible under the seven-day policy. Standard platform automation selected without AI jury review."
+    };
+  }
+
+  return null;
 }
 
 export function detectHardEscalation(caseInput: JuryCaseInput): EscalationSignal[] {
@@ -86,19 +104,20 @@ export function selectRoute(input: RoutingInput): RoutingDecision {
   const decidedAt = input.decidedAt ?? new Date().toISOString();
   const confidence = input.confidence ?? input.juryResult?.verdict.overallConfidence ?? null;
   const hardSignals = detectHardEscalation(input.caseInput);
+  const standardAutomationClause = getStandardAutomationClause(input.caseInput);
 
   // Uncontested cases bypass the AI jury by product decision.
-  if (isUncontestedCase(input.caseInput)) {
+  if (standardAutomationClause) {
     return {
       routeKind: "standard_automation",
-      routingReason: "Buyer and seller posture or policy eligibility supports standard platform automation without AI jury review.",
+      routingReason: standardAutomationClause.routingReason,
       warnings: [],
-      indicators: [],
+      indicators: [standardAutomationClause.title],
       requiresJury: false,
       confidence: null,
       cooldownSeconds: null,
       auditTrail: [
-        auditEntry(decidedAt, "route_selected", "Standard automation selected before jury execution.")
+        auditEntry(decidedAt, "route_selected", `${standardAutomationClause.title} before jury execution.`)
       ]
     };
   }

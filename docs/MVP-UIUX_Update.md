@@ -99,3 +99,20 @@ DO WE NEED A shopee like design?
 NEED REAL DB NOT MOCK? CAN use supabase for mocking or what.
 
 agent interaction framework
+
+## Implementation Note
+
+Follow the Shrimp UI/UX brandbook in `docs/themes/Shrimp-color-heavy.md`.
+
+| Area | Implementation direction |
+| --- | --- |
+| Visual brand | Use Shrimp Orange `#FF5722` for primary action, selection, focus, and brand ownership. Keep dense reviewer surfaces mostly white, charcoal, light gray, and restrained orange tint. |
+| Layout | Primary screen should be reviewer-first: left review queue/intake, center evidence workspace, right verdict workspace, with deliberation and jury traceability below. |
+| Marketplace feel | Use compact marketplace operations density inspired by e-commerce review tools, but do not clone Shopee. The UI should feel like Shrimp: warm, quick, clear, and trustworthy. |
+| Evidence trust | Buyer, seller, reviewer, logistics, policy, and history evidence should keep canonical IDs while displaying source-prefixed references such as `B1`, `S1`, `R1`, `L1`, `P1`, and `H1`. |
+| Stale output | Any intake or evidence edit must mark generated output as stale and hide computed verdict/audit/jury sections until the workflow is rerun. |
+| Uncontested route | Standard automation must name the clause: seller consent or seven-day policy. It should not describe the case as an escalation. |
+| Jury copy | Show summary bullets first. Full juror reasoning should be expandable. Live model outputs should be plain text; the UI may still render simple Markdown defensively. |
+| Reviewer decision | Human review needs structured final verdict, reason, evidence relied on, override reason, escalation target, notes, handoff state, and calibration signal. |
+| Test cases | Keep deterministic route cases for standard automation, hard human review, low-confidence human review, and provisional decision. Add boundary tests for seven-day policy and threshold behavior. |
+| Persistence | MVP can remain deterministic mock data for hackathon reliability. Production should add a real queue/audit store, with Supabase as a reasonable first persistence option if credentials and schema are available. |

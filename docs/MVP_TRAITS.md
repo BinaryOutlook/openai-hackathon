@@ -79,11 +79,55 @@ Where \( C \) is confidence, \( \tau \) is the auto-resolution threshold, \( r \
 
 As item value increases, \( \tau \) should effectively become harder to satisfy. This reflects the real platform trade-off: human review is expensive, but mistaken automation on high-value or sensitive cases is more expensive.
 
+## Uncontested Case Bypass
+
+The AI jury is only needed for disputed, risky, ambiguous, or SOP-sensitive cases. Not every return should enter the AI pipeline.
+
+If the buyer and seller already agree on the resolution, or if the buyer exercises a valid in-scope 7-day no-reason return that is not covered by a 7-day return exclusion, the case should be treated as uncontested. Uncontested cases should follow the platform's normal automated return flow without AI jury involvement.
+
+This keeps the MVP credible and operationally efficient. The system does not add AI where simple policy execution is enough.
+
+| Case condition | Route | AI involvement |
+| --- | --- | --- |
+| Buyer and seller agree on refund, return, or exchange | Standard uncontested return flow | No AI jury needed. |
+| Valid in-scope 7-day no-reason return | Standard policy automation | No AI jury needed unless fraud, exclusion, or abnormal history is detected. |
+| 7-day return exclusion applies | Disputed or SOP-sensitive flow | AI may summarize, but human review may still be required. |
+| Seller contests buyer claim | Request auto-selection layer | AI jury or human review depending on risk and confidence. Human review may still be required. |
+| Buyer evidence and seller evidence conflict | Request auto-selection layer | AI jury evaluates evidence and may escalate. Human review may still be required. |
+| Potential fraud or manipulation appears | Human review | AI jury provides warning comments and cited fraud indicators. |
+
+The first decision is therefore not "What should AI decide?" but "Does this case need AI at all?"
+
+## Routing Flowchart
+
+```mermaid
+flowchart TD
+    A["User submits return or refund request"] --> B["Collect preselected reason, text writing, and image evidence"]
+    B --> C{"Is the case uncontested?"}
+    C -->|Buyer/seller agree or valid in-scope 7-day return| D["Standard uncontested return or policy automation: no AI jury"]
+    C -->|Dispute, exclusion, risk, or ambiguity| E["Request auto-selection layer"]
+
+    E --> F{"Potential fraud, SOP trigger, or return exclusion?"}
+    F -->|Yes| H["Human review with AI jury context, indicators, and warnings. Human makes final call."]
+    F -->|No| G{"AI confidence sufficient?"}
+
+    G -->|No| H
+    G -->|Yes| I["Provisional AI decision"]
+    I --> J["60-second cooldown window"]
+    J --> K{"Human override submitted?"}
+    K -->|Yes| L["Human overruling point becomes final decision record"]
+    K -->|No| M["AI decision becomes final after cooldown"]
+
+    H --> R["Audit export with evidence IDs and routing reason"]
+    L --> R
+    M --> R
+```
+
 ## Request Auto-Selection Layer
 
 When the user submits a return or refund request, the first system step should be an auto-selection layer. This layer decides whether the request can enter a fast AI decision path or must be routed to human review.
 
-The routing should be simple enough to explain in the demo:
+After uncontested cases are bypassed, the routing for remaining contested cases should be simple enough to explain in the demo:
 
 | Auto-selection outcome | Route | System explanation |
 | --- | --- | --- |

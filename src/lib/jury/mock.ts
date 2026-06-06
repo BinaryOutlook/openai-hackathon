@@ -64,6 +64,26 @@ type MockProfile = {
 };
 
 function getMockProfile(caseInput: JuryCaseInput, agentId: string): MockProfile {
+  if (caseInput.id.includes("buyer-abuse")) {
+    return buyerAbuseProfile(agentId);
+  }
+
+  if (caseInput.id.includes("seller-misconduct")) {
+    return sellerMisconductProfile(agentId);
+  }
+
+  if (caseInput.id.includes("logistics-fault")) {
+    return obviousLogisticsFaultProfile(agentId);
+  }
+
+  if (caseInput.id.includes("high-value-authenticity")) {
+    return highValueAuthenticityProfile(agentId);
+  }
+
+  if (caseInput.id.includes("seller-prompt-manipulation")) {
+    return sellerPromptManipulationProfile(caseInput, agentId);
+  }
+
   if (caseInput.id.includes("opened") || containsPromptInjection(caseInput)) {
     return openedCosmeticProfile(caseInput, agentId);
   }
@@ -249,6 +269,180 @@ function damagedDeliveryProfile(agentId: string): MockProfile {
     "No suspicious buyer pattern appears, and the courier exception reduces buyer responsibility.",
     ["Fragile item packaging warning."],
     "Approve buyer protection and route cost allocation to operations."
+  );
+}
+
+function buyerAbuseProfile(agentId: string): MockProfile {
+  if (agentId === "buyer-advocate") {
+    return profile(
+      "need_more_evidence",
+      0.66,
+      0.62,
+      0.64,
+      ["E1", "E2", "E3"],
+      "The buyer still deserves an appeal path, but the missing unboxing evidence and weight mismatch make automatic buyer protection unsafe.",
+      ["Buyer claim lacks unboxing proof."],
+      "Ask for stronger buyer evidence before any refund."
+    );
+  }
+
+  if (agentId === "fraud-risk" || agentId === "human-escalation") {
+    return profile(
+      "escalate",
+      0.88,
+      0.82,
+      0.92,
+      ["E2", "E3"],
+      "The repeated empty-parcel pattern, chargeback history, and return-weight mismatch create a strong abuse signal.",
+      ["Repeated empty-parcel pattern.", "Chargeback history.", "High abuse risk."],
+      "Route to risk review and preserve warehouse and parcel-weight records."
+    );
+  }
+
+  return profile(
+    "support_seller",
+    0.84,
+    0.8,
+    0.78,
+    ["E1", "E2", "E3"],
+    "The seller-side warehouse and weight evidence is stronger than the buyer's unsupported empty-box claim.",
+    ["Return parcel weight contradicts the buyer claim."],
+    "Reject automatic refund and require human/risk confirmation."
+  );
+}
+
+function sellerMisconductProfile(agentId: string): MockProfile {
+  if (agentId === "seller-advocate") {
+    return profile(
+      "need_more_evidence",
+      0.68,
+      0.74,
+      0.18,
+      ["E1", "E2"],
+      "The seller may argue wording nuance, but the care label and listing screenshot are difficult to reconcile.",
+      ["Seller explanation does not rebut the label mismatch."],
+      "Approve if the listing screenshot is verified against the order page."
+    );
+  }
+
+  return profile(
+    "support_buyer",
+    0.91,
+    0.9,
+    0.2,
+    ["E1", "E2", "E3"],
+    "The received product label contradicts the listing's leather claim, and recent seller complaints point to a repeated material-mismatch issue.",
+    ["Seller material-mismatch pattern."],
+    "Approve the return and add the seller to listing-quality monitoring."
+  );
+}
+
+function obviousLogisticsFaultProfile(agentId: string): MockProfile {
+  if (agentId === "seller-advocate") {
+    return profile(
+      "support_buyer",
+      0.8,
+      0.84,
+      0.22,
+      ["E2", "E3"],
+      "Seller handoff evidence is clean and the courier rain exception explains the damage without shifting blame to the buyer.",
+      ["Cost responsibility should move to carrier review."],
+      "Approve buyer protection and assign cost review to logistics."
+    );
+  }
+
+  if (agentId === "packaging-logistics") {
+    return profile(
+      "support_buyer",
+      0.92,
+      0.93,
+      0.18,
+      ["E1", "E2", "E3"],
+      "The courier rain-exposure scan, damp delivery note, and buyer photo form a coherent logistics-fault chain.",
+      ["Courier water exposure is documented."],
+      "Approve the return and open carrier reimbursement."
+    );
+  }
+
+  return profile(
+    "support_buyer",
+    0.86,
+    0.88,
+    0.2,
+    ["E1", "E2"],
+    "The damage was reported immediately and the logistics exception independently supports the buyer's condition evidence.",
+    ["Buyer risk is low."],
+    "Approve buyer protection while preserving carrier evidence."
+  );
+}
+
+function highValueAuthenticityProfile(agentId: string): MockProfile {
+  if (agentId === "human-escalation") {
+    return profile(
+      "support_buyer",
+      0.87,
+      0.86,
+      0.36,
+      ["E1", "E2", "E3"],
+      "The serial mismatch is credible, but the item value means the refund must wait for manual approval.",
+      ["High-value manual approval required."],
+      "Send to human review with custody and authenticity evidence attached."
+    );
+  }
+
+  return profile(
+    "support_buyer",
+    0.9,
+    0.88,
+    0.28,
+    ["E1", "E2", "E3"],
+    "The buyer has strong serial-number evidence and the seller consents to a controlled return flow.",
+    ["Serial-number mismatch requires preservation."],
+    "Approve the return recommendation, subject to manual high-value review."
+  );
+}
+
+function sellerPromptManipulationProfile(caseInput: JuryCaseInput, agentId: string): MockProfile {
+  const injection = containsPromptInjection(caseInput);
+
+  if (agentId === "evidence-sentinel") {
+    return profile(
+      "escalate",
+      0.92,
+      0.88,
+      0.8,
+      ["E2", "E3"],
+      "The seller message contains instruction-like text, so it must be isolated as adversarial evidence rather than followed.",
+      ["Prompt injection attempt detected in seller response."],
+      "Escalate for safety review while keeping the size evidence intact.",
+      injection
+    );
+  }
+
+  if (agentId === "human-escalation") {
+    return profile(
+      "escalate",
+      0.86,
+      0.84,
+      0.76,
+      ["E1", "E2", "E3"],
+      "The size evidence favors the buyer, but the seller's manipulation attempt requires human confirmation before final action.",
+      ["Manual confirmation advised after manipulation attempt."],
+      "Route to human review with the seller text marked as untrusted evidence.",
+      injection
+    );
+  }
+
+  return profile(
+    "support_buyer",
+    0.88,
+    0.87,
+    0.32,
+    ["E1", "E2"],
+    "The order record and shoe label show a concrete size mismatch, while the seller response tries to steer the system instead of rebutting the evidence.",
+    ["Seller response does not rebut size mismatch."],
+    "Approve the buyer's return after human review confirms the prompt-injection handling.",
+    injection && agentId === "fraud-risk"
   );
 }
 

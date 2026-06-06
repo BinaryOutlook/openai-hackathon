@@ -220,6 +220,66 @@ export function getWorkflowStage(elapsedSeconds: number) {
 }
 
 export function getQueueMeta(caseInput: JuryCaseInput) {
+  if (caseInput.orderValue > 500) {
+    return {
+      priority: "High",
+      risk: "High value",
+      sla: "1h",
+      waiting: "9m",
+      owner: "Ops lead",
+      tone: "bg-[#fce8e6] text-coral",
+      filters: ["Needs escalation", "High value", "Policy risk"]
+    };
+  }
+
+  if (caseInput.id.includes("buyer-abuse")) {
+    return {
+      priority: "High",
+      risk: "Fraud",
+      sla: "1h",
+      waiting: "17m",
+      owner: "Risk",
+      tone: "bg-[#fce8e6] text-coral",
+      filters: ["Needs escalation", "Fraud risk"]
+    };
+  }
+
+  if (caseInput.id.includes("seller-prompt")) {
+    return {
+      priority: "High",
+      risk: "Safety",
+      sla: "2h",
+      waiting: "21m",
+      owner: "Safety",
+      tone: "bg-[#fce8e6] text-coral",
+      filters: ["Needs escalation", "Safety review", "Policy risk"]
+    };
+  }
+
+  if (caseInput.id.includes("seller-misconduct")) {
+    return {
+      priority: "High",
+      risk: "Seller",
+      sla: "3h",
+      waiting: "26m",
+      owner: "Ops",
+      tone: "bg-[#fff3d6] text-[#7a4d00]",
+      filters: ["High disagreement", "New evidence"]
+    };
+  }
+
+  if (caseInput.id.includes("logistics-fault")) {
+    return {
+      priority: "Medium",
+      risk: "Logistics",
+      sla: "4h",
+      waiting: "14m",
+      owner: "Carrier ops",
+      tone: "bg-mint text-teal",
+      filters: ["Logistics", "New evidence"]
+    };
+  }
+
   if (caseInput.sellerAgreesToReturn) {
     return {
       priority: "Routine",

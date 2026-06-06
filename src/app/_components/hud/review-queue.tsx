@@ -10,7 +10,17 @@ import {
   type QueueCaseStatus
 } from "../../_lib/workspace";
 
-const filters = ["High disagreement", "Needs escalation", "Policy risk", "Low confidence", "New evidence"];
+const filters = [
+  "High disagreement",
+  "Needs escalation",
+  "Policy risk",
+  "Low confidence",
+  "New evidence",
+  "Fraud risk",
+  "High value",
+  "Safety review",
+  "Logistics"
+];
 
 export function ReviewQueue({
   selectedCaseId,

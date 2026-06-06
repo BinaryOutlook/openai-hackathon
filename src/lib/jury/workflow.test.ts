@@ -108,6 +108,63 @@ describe("return workflow", () => {
     expect(Math.max(...messageCounts.values())).toBeLessThanOrEqual(MAX_DEBATE_MESSAGES_PER_AGENT);
     expect(result.jury?.debateTurns.at(-1)?.phase).toBe("consensus");
   });
+
+  it("pins the extended extreme demo cases to stable outcomes", async () => {
+    const cases = [
+      {
+        id: "case-extreme-buyer-abuse",
+        routeKind: "human_review",
+        warning: "Potential fraud indicator",
+        decision: "Escalate to human review",
+        dominantVote: "support_seller"
+      },
+      {
+        id: "case-extreme-seller-misconduct",
+        routeKind: "provisional_ai_decision",
+        warning: null,
+        decision: "Approve buyer return",
+        dominantVote: "support_buyer"
+      },
+      {
+        id: "case-obvious-logistics-fault",
+        routeKind: "provisional_ai_decision",
+        warning: null,
+        decision: "Approve buyer return",
+        dominantVote: "support_buyer"
+      },
+      {
+        id: "case-high-value-authenticity",
+        routeKind: "human_review",
+        warning: "High-value item",
+        decision: "Escalate to human review",
+        dominantVote: "support_buyer"
+      },
+      {
+        id: "case-seller-prompt-manipulation",
+        routeKind: "human_review",
+        warning: "Prompt injection attempt",
+        decision: "Escalate to human review",
+        dominantVote: "support_buyer"
+      }
+    ] as const;
+
+    for (const demo of cases) {
+      const result = await runReturnWorkflow(demoCase(demo.id), {
+        now: NOW,
+        juryRunner: (caseInput) => runMockJury(caseInput)
+      });
+
+      expect(result.route.routeKind).toBe(demo.routeKind);
+      expect(result.jury?.verdict.decision).toBe(demo.decision);
+      expect(result.jury?.verdict.voteSummary[demo.dominantVote]).toBeGreaterThanOrEqual(4);
+
+      if (demo.warning) {
+        expect(result.route.warnings).toContain(demo.warning);
+      } else {
+        expect(result.route.warnings).toEqual([]);
+      }
+    }
+  });
 });
 
 function demoCase(id: string) {

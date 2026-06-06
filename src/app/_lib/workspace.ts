@@ -68,7 +68,9 @@ export const routeStyles: Record<RouteKind, string> = {
 };
 
 export type EvidenceAliases = Record<string, string>;
-export type WorkspaceView = "hud" | "ai-jury";
+export type WorkspaceView = "hud" | "human-review" | "ai-jury";
+
+export const MAX_EVIDENCE_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export type ReviewerDecision = {
   finalVerdict: string;
@@ -128,6 +130,10 @@ export function getClientFinalDecision(
 }
 
 export function fileToDataUrl(file: File) {
+  if (file.size > MAX_EVIDENCE_IMAGE_BYTES) {
+    throw new Error(`${file.name} is larger than the 4 MB evidence image limit.`);
+  }
+
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -208,7 +214,8 @@ export function getQueueMeta(caseInput: JuryCaseInput) {
       sla: "24h",
       waiting: "12m",
       owner: "Auto",
-      tone: "bg-mint text-teal"
+      tone: "bg-mint text-teal",
+      filters: ["New evidence"]
     };
   }
 
@@ -219,7 +226,8 @@ export function getQueueMeta(caseInput: JuryCaseInput) {
       sla: "2h",
       waiting: "48m",
       owner: "Risk",
-      tone: "bg-[#fce8e6] text-coral"
+      tone: "bg-[#fce8e6] text-coral",
+      filters: ["Needs escalation", "Policy risk"]
     };
   }
 
@@ -230,7 +238,8 @@ export function getQueueMeta(caseInput: JuryCaseInput) {
       sla: "8h",
       waiting: "31m",
       owner: "Ops",
-      tone: "bg-[#fff3d6] text-[#7a4d00]"
+      tone: "bg-[#fff3d6] text-[#7a4d00]",
+      filters: ["Low confidence"]
     };
   }
 
@@ -240,7 +249,8 @@ export function getQueueMeta(caseInput: JuryCaseInput) {
     sla: "4h",
     waiting: "22m",
     owner: "Ops",
-    tone: "bg-[#ffebe6] text-teal"
+    tone: "bg-[#ffebe6] text-teal",
+    filters: caseInput.id.includes("damaged") ? ["Needs escalation", "High disagreement"] : ["High disagreement", "New evidence"]
   };
 }
 
@@ -356,6 +366,62 @@ export function buildReviewerDecisionRecord({
     })),
     timestamp,
     persistenceStatus: "exported_audit_json"
+  };
+}
+
+export function getExportValidation(
+  result: WorkflowResult | null,
+  caseInput: JuryCaseInput,
+  reviewerDecision: ReviewerDecision
+) {
+  if (!result) {
+    return {
+      canExport: false,
+      reason: "Run workflow before exporting."
+    };
+  }
+
+  if (result.route.routeKind !== "human_review") {
+    return {
+      canExport: true,
+      reason: "Ready to export."
+    };
+  }
+
+  if (!reviewerDecision.finalVerdict) {
+    return {
+      canExport: false,
+      reason: "Select a final verdict before export."
+    };
+  }
+
+  if (!reviewerDecision.reason.trim()) {
+    return {
+      canExport: false,
+      reason: "Add the reviewer rationale before export."
+    };
+  }
+
+  if (!reviewerDecision.evidenceReliedOn.length) {
+    return {
+      canExport: false,
+      reason: "Select at least one evidence item before export."
+    };
+  }
+
+  if (
+    !isReviewerAligned(getSystemRecommendation(result, caseInput), reviewerDecision.finalVerdict) &&
+    !reviewerDecision.overrideReason.trim()
+  ) {
+    return {
+      canExport: false,
+      reason: "Add an override reason for a decision that differs from the system."
+    };
+  }
+
+  return {
+    canExport: true,
+    reason: "Ready to export."
   };
 }
 

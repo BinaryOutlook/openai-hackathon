@@ -4,9 +4,10 @@
 
 :root {
   color-scheme: light;
-  --shrimp-orange: #ff5722;
-  --shrimp-orange-hover: #e64a19;
-  --shrimp-orange-active: #bf360c;
+  --shrimp-orange: #bf360c;
+  --shrimp-orange-bright: #ff5722;
+  --shrimp-orange-hover: #a62f08;
+  --shrimp-orange-active: #872500;
   --shrimp-orange-tint: #ffebe6;
   --shrimp-warm-surface: #fff7f4;
   --shrimp-mint: #00bfa5;

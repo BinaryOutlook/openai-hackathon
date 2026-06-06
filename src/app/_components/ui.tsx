@@ -13,9 +13,9 @@ export function ReviewList({ title, items }: { title: string; items: string[] })
     <div className="rounded-md border border-coral/30 bg-white p-3">
       <p className="text-xs font-semibold uppercase">{title}</p>
       {items.length ? (
-        <ul className="mt-2 grid max-h-44 gap-2 overflow-y-auto pr-1 text-sm leading-6">
+        <ul className="mt-2 grid gap-2 pr-1 text-sm leading-6">
           {items.map((item) => (
-            <li key={item}>{item}</li>
+            <li key={item} className="[overflow-wrap:anywhere]">{item}</li>
           ))}
         </ul>
       ) : (
@@ -79,9 +79,9 @@ export function PendingComputedSection({
 
 export function ReadOnlyMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-h-16 rounded-md border border-line bg-white px-3 py-2">
+    <div className="min-h-16 min-w-0 rounded-md border border-line bg-white px-3 py-2">
       <p className="text-xs font-semibold uppercase text-graphite">{label}</p>
-      <p className="mt-1 text-sm font-semibold leading-5 text-ink">{value}</p>
+      <p className="mt-1 text-sm font-semibold leading-5 text-ink [overflow-wrap:anywhere]">{value}</p>
     </div>
   );
 }
@@ -99,7 +99,7 @@ export function StatusPill({
 }) {
   if (isRunning) {
     return (
-      <span className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
+      <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {getWorkflowStage(elapsedSeconds).label}
       </span>
@@ -108,7 +108,7 @@ export function StatusPill({
 
   if (hasUnrunChanges) {
     return (
-      <span className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
+      <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
         <TimerReset className="h-4 w-4" aria-hidden="true" />
         Rerun needed
       </span>
@@ -116,7 +116,7 @@ export function StatusPill({
   }
 
   return (
-    <span className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-graphite">
+    <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-graphite">
       <ShieldCheck className="h-4 w-4 text-teal" aria-hidden="true" />
       {result ? routeLabels[result.route.routeKind] : "Ready"}
     </span>

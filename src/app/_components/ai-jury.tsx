@@ -1,4 +1,5 @@
 import { FileText, Gavel, History, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import type { AgentOpinion, JuryCaseInput, RouteKind, WorkflowResult } from "@/types/jury";
 import {
   EmptyState,
@@ -122,9 +123,9 @@ export function JuryPanel({
       {opinions.length ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {opinions.map((opinion) => (
-            <article key={opinion.agentId} className="rounded-md border border-line bg-white p-3">
+            <article key={opinion.agentId} className="min-w-0 rounded-md border border-line bg-white p-3">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-sm font-semibold">{opinion.agentName}</h3>
                   <p className="mt-1 text-xs text-graphite">Confidence {formatPercent(opinion.confidence)}</p>
                 </div>
@@ -133,16 +134,23 @@ export function JuryPanel({
                 </span>
               </div>
 
-              <ul className="mt-3 grid gap-2 text-sm leading-5 text-graphite">
-                <li>Main rationale: {summarizeOpinion(opinion.reasoning)}</li>
-                <li>Evidence used: {formatEvidenceList(opinion.citedEvidenceIds, evidenceAliases)}</li>
-                <li>Disagreement notes: {opinion.riskFlags.join(" ") || "No material disagreement noted."}</li>
+              <p className="mt-3 text-sm leading-5 text-ink">
+                <strong className="text-teal">{voteLabels[opinion.vote]}</strong> recommendation
+              </p>
+              <ul className="mt-2 grid gap-1.5 text-sm leading-5 text-graphite">
+                {buildOpinionSummary(opinion, evidenceAliases).map((point) => (
+                  <li key={point} className="[overflow-wrap:anywhere]">{point}</li>
+                ))}
               </ul>
 
-              <details className="mt-3 rounded-md border border-line bg-[#f5f5f5] p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-teal">Full reasoning</summary>
-                <MarkdownText className="mt-2 text-sm leading-6 text-graphite" text={opinion.reasoning} />
-                <p className="mt-3 text-sm font-medium text-ink">{opinion.recommendation}</p>
+              <details className="mt-3 min-w-0 rounded-md border border-line bg-[#f5f5f5]">
+                <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold text-teal">
+                  Full reasoning
+                </summary>
+                <div className="px-3 pb-3">
+                  <MarkdownText className="mt-1 text-sm leading-6 text-graphite [overflow-wrap:anywhere]" text={opinion.reasoning} />
+                  <p className="mt-3 text-sm font-medium text-ink [overflow-wrap:anywhere]">{opinion.recommendation}</p>
+                </div>
               </details>
             </article>
           ))}
@@ -183,29 +191,85 @@ export function DeliberationPanel({
       {result ? (
         <div className="mt-4 grid gap-4">
           <DeliberationTimeline result={result} evidenceCount={caseInput.evidence.length} />
-          <DisagreementInspector result={result} evidenceAliases={evidenceAliases} />
-          <AgentInteractionFramework result={result} />
-          <div>
-            <h3 className="text-sm font-semibold">Recommended Actions</h3>
-            <ul className="mt-2 grid gap-2 text-sm leading-6 text-graphite">
+          <div className="grid gap-2 md:grid-cols-3">
+            <ReadOnlyMetric label="Vote split" value={formatVoteSplit(result.verdict.voteSummary)} />
+            <ReadOnlyMetric label="Recommendation" value={result.verdict.decision} />
+            <ReadOnlyMetric
+              label="Evidence IDs"
+              value={formatEvidenceList(
+                Array.from(new Set(result.opinions.flatMap((opinion) => opinion.citedEvidenceIds))),
+                evidenceAliases
+              )}
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <MetricBar
+              label="Overall confidence"
+              value={result.verdict.overallConfidence}
+              tone={result.verdict.overallConfidence >= 0.75 ? "teal" : "amber"}
+            />
+            <MetricBar label="Risk score" value={result.verdict.riskScore} tone={result.verdict.riskScore >= 0.7 ? "coral" : "cedar"} />
+          </div>
+          <Disclosure title="Disagreement Inspector">
+            <DisagreementInspector result={result} evidenceAliases={evidenceAliases} />
+          </Disclosure>
+          <Disclosure title="Agent Interaction">
+            <AgentInteractionFramework result={result} />
+          </Disclosure>
+          <Disclosure title="Recommended Actions">
+            <ul className="grid gap-2 text-sm leading-6 text-graphite">
               {result.verdict.recommendedActions.map((action) => (
                 <li key={action} className="rounded-md border border-line bg-[#f5f5f5] px-3 py-2">
                   {action}
                 </li>
               ))}
             </ul>
-          </div>
+          </Disclosure>
           <div className="rounded-md border border-line bg-[#f5f5f5] p-3">
             <p className="text-xs font-semibold uppercase text-teal">Rationale</p>
-            <MarkdownText className="mt-2 text-sm leading-6 text-graphite" text={result.verdict.rationale} />
+            <MarkdownText className="mt-2 text-sm leading-6 text-graphite [overflow-wrap:anywhere]" text={result.verdict.rationale} />
           </div>
-          <SimilarPastCases caseInput={caseInput} />
         </div>
       ) : (
         <EmptyState label={routeKind === "standard_automation" ? "No jury deliberation required" : "Awaiting deliberation"} />
       )}
     </section>
   );
+}
+
+function Disclosure({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="rounded-md border border-line bg-white">
+      <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold text-ink">
+        {title}
+      </summary>
+      <div className="border-t border-line p-3">{children}</div>
+    </details>
+  );
+}
+
+function buildOpinionSummary(opinion: AgentOpinion, evidenceAliases: EvidenceAliases) {
+  const rationale = limitWords(summarizeOpinion(opinion.reasoning), 9);
+  const signal = opinion.riskFlags.length
+    ? limitWords(opinion.riskFlags.join(" "), 8)
+    : `Evidence ${formatEvidenceList(opinion.citedEvidenceIds, evidenceAliases)}`;
+
+  return [`Why: ${rationale}`, `Signal: ${signal}`];
+}
+
+function limitWords(text: string, maxWords: number) {
+  const words = text
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}...`;
 }
 
 function DeliberationTimeline({
@@ -252,9 +316,7 @@ function DisagreementInspector({
   const groups = buildDisagreementGroups(result.opinions, evidenceAliases);
 
   return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <h3 className="text-sm font-semibold">Disagreement Inspector</h3>
-      <div className="mt-3 grid gap-2">
+    <div className="grid gap-2">
         {groups.map((group) => (
           <div key={group.title} className="rounded-md border border-line bg-[#f5f5f5] p-3">
             <div className="flex items-start justify-between gap-2">
@@ -264,7 +326,6 @@ function DisagreementInspector({
             <p className="mt-2 text-sm leading-5 text-graphite">{group.detail}</p>
           </div>
         ))}
-      </div>
     </div>
   );
 }
@@ -274,13 +335,10 @@ function AgentInteractionFramework({ result }: { result: NonNullable<WorkflowRes
   const riskFlags = Array.from(new Set(result.opinions.flatMap((opinion) => opinion.riskFlags))).slice(0, 3);
 
   return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <h3 className="text-sm font-semibold">Agent Interaction</h3>
-      <div className="mt-3 grid gap-2">
+    <div className="grid gap-2">
         <ReadOnlyMetric label="Initial positions" value={split} />
-        <ReadOnlyMetric label="Challenge points" value={riskFlags.join(" ") || "No blocking challenge points."} />
+        <ReadOnlyMetric label="Challenge points" value={limitWords(riskFlags.join(" ") || "No blocking challenge points.", 16)} />
         <ReadOnlyMetric label="Final recommendation" value={result.verdict.decision} />
-      </div>
     </div>
   );
 }

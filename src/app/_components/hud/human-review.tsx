@@ -120,7 +120,7 @@ function ReviewerVerdictComposer({
             {caseInput.evidence.map((evidence) => (
               <label
                 key={evidence.id}
-                className="flex min-h-10 items-center gap-2 rounded-md border border-line bg-[#f5f5f5] px-3 text-sm"
+                className="flex min-h-11 min-w-0 items-center gap-2 rounded-md border border-line bg-[#f5f5f5] px-3 text-sm"
               >
                 <input
                   type="checkbox"
@@ -131,7 +131,7 @@ function ReviewerVerdictComposer({
                 <span className="font-mono text-xs font-semibold text-teal">
                   {evidenceAliases[evidence.id] ?? evidence.id}
                 </span>
-                <span className="truncate text-graphite">{evidence.label}</span>
+                <span className="min-w-0 truncate text-graphite">{evidence.label}</span>
               </label>
             ))}
           </div>
@@ -192,7 +192,7 @@ function DecisionRecordPreview({
 }) {
   const selectedEvidence = formatEvidenceList(reviewerDecision.evidenceReliedOn, evidenceAliases);
   const recommendation = getSystemRecommendation(result, caseInput);
-  const reasonStatus = reviewerDecision.finalVerdict === "reject_return" && !reviewerDecision.reason.trim()
+  const reasonStatus = reviewerDecision.finalVerdict && !reviewerDecision.reason.trim()
     ? "Reason needed"
     : reviewerDecision.finalVerdict
       ? "Decision drafted"

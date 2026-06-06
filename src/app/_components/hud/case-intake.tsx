@@ -26,7 +26,7 @@ export function CaseIntake({
 }) {
   const controlsDisabled = !isEditable || isRunning;
   const inputClass =
-    "min-h-10 rounded-md border border-line bg-white px-3 text-sm disabled:bg-[#f5f5f5] disabled:text-graphite";
+    "min-h-11 rounded-md border border-line bg-white px-3 text-sm disabled:bg-[#f5f5f5] disabled:text-graphite";
   const textAreaClass =
     "resize-none rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 disabled:bg-[#f5f5f5] disabled:text-graphite";
 
@@ -43,7 +43,7 @@ export function CaseIntake({
           type="button"
           onClick={onToggleEditable}
           disabled={isRunning}
-          className="inline-flex min-h-9 items-center gap-2 rounded-md border border-teal bg-white px-3 text-sm font-semibold text-teal transition hover:bg-[#fff7f4] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-teal bg-white px-3 text-sm font-semibold text-teal transition hover:bg-[#fff7f4] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Edit3 className="h-4 w-4" aria-hidden="true" />
           {isEditable ? "Lock" : "Edit"}
@@ -78,7 +78,7 @@ export function CaseIntake({
           </select>
         </label>
 
-        <label className="flex min-h-10 items-center gap-3 rounded-md border border-line bg-white px-3 text-sm font-medium has-[:disabled]:bg-[#f5f5f5]">
+        <label className="flex min-h-11 items-center gap-3 rounded-md border border-line bg-white px-3 text-sm font-medium has-[:disabled]:bg-[#f5f5f5]">
           <input
             type="checkbox"
             checked={caseInput.sellerAgreesToReturn}
@@ -126,7 +126,7 @@ export function CaseIntake({
           </select>
         </label>
 
-        <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-teal bg-[#ffebe6] px-3 text-sm font-semibold text-teal transition hover:bg-[#fff7f4]">
+        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-teal bg-[#ffebe6] px-3 text-sm font-semibold text-teal transition hover:bg-[#fff7f4]">
           <ImagePlus className="h-4 w-4" aria-hidden="true" />
           Add image evidence
           <input

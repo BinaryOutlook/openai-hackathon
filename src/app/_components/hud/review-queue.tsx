@@ -1,6 +1,11 @@
+"use client";
+
 import { ListFilter } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { DEMO_CASES } from "@/lib/jury/demo-cases";
 import { getQueueMeta } from "../../_lib/workspace";
+
+const filters = ["High disagreement", "Needs escalation", "Policy risk", "Low confidence", "New evidence"];
 
 export function ReviewQueue({
   selectedCaseId,
@@ -9,7 +14,31 @@ export function ReviewQueue({
   selectedCaseId: string;
   onSelectCase: (caseId: string) => void;
 }) {
-  const filters = ["High disagreement", "Needs escalation", "Policy risk", "Low confidence", "New evidence"];
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const visibleCases = useMemo(() => {
+    if (!activeFilters.length) {
+      return DEMO_CASES;
+    }
+
+    return DEMO_CASES.filter((demoCase) => {
+      const meta = getQueueMeta(demoCase);
+      return activeFilters.some((filter) => meta.filters.includes(filter));
+    });
+  }, [activeFilters]);
+
+  useEffect(() => {
+    if (!activeFilters.length || !visibleCases.length || visibleCases.some((demoCase) => demoCase.id === selectedCaseId)) {
+      return;
+    }
+
+    onSelectCase(visibleCases[0].id);
+  }, [activeFilters.length, onSelectCase, selectedCaseId, visibleCases]);
+
+  function toggleFilter(filter: string) {
+    setActiveFilters((current) =>
+      current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter]
+    );
+  }
 
   return (
     <section className="rounded-md border border-line bg-white p-4 shadow-soft">
@@ -26,15 +55,21 @@ export function ReviewQueue({
           <button
             key={filter}
             type="button"
-            className="rounded-full border border-line bg-[#f5f5f5] px-2.5 py-1 text-xs font-medium text-graphite transition hover:border-teal hover:bg-[#fff7f4] hover:text-teal"
+            aria-pressed={activeFilters.includes(filter)}
+            onClick={() => toggleFilter(filter)}
+            className={`min-h-11 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              activeFilters.includes(filter)
+                ? "border-teal bg-[#fff7f4] text-teal shadow-brand"
+                : "border-line bg-[#f5f5f5] text-graphite hover:border-teal hover:bg-[#fff7f4] hover:text-teal"
+            }`}
           >
             {filter}
           </button>
         ))}
       </div>
 
-      <div className="mt-4 grid max-h-[360px] gap-2 overflow-y-auto pr-1">
-        {DEMO_CASES.map((demoCase) => {
+      <div className="mt-4 grid gap-2 pr-1">
+        {visibleCases.length ? visibleCases.map((demoCase) => {
           const meta = getQueueMeta(demoCase);
           const selected = demoCase.id === selectedCaseId;
           return (
@@ -65,7 +100,11 @@ export function ReviewQueue({
               </div>
             </button>
           );
-        })}
+        }) : (
+          <p className="rounded-md border border-line bg-[#f5f5f5] p-3 text-sm text-graphite">
+            No demo cases match the selected filters.
+          </p>
+        )}
       </div>
     </section>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Download, Gavel, Loader2, Scale } from "lucide-react";
+import { AlertTriangle, Download, Gavel, Loader2, Scale, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DEMO_CASES } from "@/lib/jury/demo-cases";
 import type { EvidenceItem, EvidenceSource, JuryCaseInput, WorkflowResult } from "@/types/jury";
@@ -26,6 +26,7 @@ import {
   evidenceSourcePrefixes,
   fileToDataUrl,
   getClientFinalDecision,
+  getExportValidation,
   getSimilarPastCases,
   sourceLabels,
   type ReviewerDecision,
@@ -100,6 +101,10 @@ export default function Home() {
   const evidenceAliases = useMemo(() => buildEvidenceAliases(caseInput.evidence), [caseInput.evidence]);
   const similarCases = useMemo(() => getSimilarPastCases(caseInput), [caseInput]);
   const displayedResult = isRunning || hasUnrunChanges ? null : result;
+  const exportValidation = useMemo(
+    () => getExportValidation(displayedResult, caseInput, reviewerDecision),
+    [caseInput, displayedResult, reviewerDecision]
+  );
 
   async function runWorkflow(input = caseInput) {
     const inputSnapshot = cloneCase(input);
@@ -165,25 +170,30 @@ export default function Home() {
       return;
     }
 
-    const uploaded = await Promise.all(
-      Array.from(files).map(async (file, index): Promise<EvidenceItem> => {
-        const imageDataUrl = await fileToDataUrl(file);
-        return {
-          id: `${evidenceSourcePrefixes[source]}${Date.now()}-${index + 1}`,
-          label: file.name,
-          source,
-          kind: "image",
-          summary: `Uploaded ${sourceLabels[source].toLowerCase()} evidence image.`,
-          imageDataUrl
-        };
-      })
-    );
+    try {
+      setError(null);
+      const uploaded = await Promise.all(
+        Array.from(files).map(async (file, index): Promise<EvidenceItem> => {
+          const imageDataUrl = await fileToDataUrl(file);
+          return {
+            id: `${evidenceSourcePrefixes[source]}${Date.now()}-${index + 1}`,
+            label: file.name,
+            source,
+            kind: "image",
+            summary: `Uploaded ${sourceLabels[source].toLowerCase()} evidence image.`,
+            imageDataUrl
+          };
+        })
+      );
 
-    setCaseInput((current) => ({
-      ...current,
-      evidence: [...current.evidence, ...uploaded]
-    }));
-    markInputChanged();
+      setCaseInput((current) => ({
+        ...current,
+        evidence: [...current.evidence, ...uploaded]
+      }));
+      markInputChanged();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Unable to upload evidence image.");
+    }
   }
 
   function updateReviewerDecision<K extends keyof ReviewerDecision>(key: K, value: ReviewerDecision[K]) {
@@ -207,7 +217,8 @@ export default function Home() {
   }
 
   function exportVerdict() {
-    if (!displayedResult) {
+    if (!displayedResult || !exportValidation.canExport) {
+      setError(exportValidation.reason);
       return;
     }
 
@@ -261,41 +272,47 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill
-              result={displayedResult}
-              isRunning={isRunning}
-              hasUnrunChanges={hasUnrunChanges}
-              elapsedSeconds={elapsedSeconds}
-            />
-            {hasUnrunChanges ? (
-              <span className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
-                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                Changes made
-              </span>
+          <div className="flex flex-col items-start gap-2 lg:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill
+                result={displayedResult}
+                isRunning={isRunning}
+                hasUnrunChanges={hasUnrunChanges}
+                elapsedSeconds={elapsedSeconds}
+              />
+              {hasUnrunChanges ? (
+                <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-amber/30 bg-[#fff3d6] px-3 text-sm font-semibold text-[#7a4d00]">
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                  Changes made
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void runWorkflow()}
+                disabled={isRunning}
+                className="inline-flex min-h-11 items-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Gavel className="h-4 w-4" aria-hidden="true" />
+                )}
+                Run workflow
+              </button>
+              <button
+                type="button"
+                onClick={exportVerdict}
+                disabled={!exportValidation.canExport}
+                title={exportValidation.reason}
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:bg-[#fff7f4] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export
+              </button>
+            </div>
+            {displayedResult?.route.routeKind === "human_review" && !exportValidation.canExport ? (
+              <p className="text-xs font-semibold text-coral">{exportValidation.reason}</p>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void runWorkflow()}
-              disabled={isRunning}
-              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e64a19] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isRunning ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Gavel className="h-4 w-4" aria-hidden="true" />
-              )}
-              Run workflow
-            </button>
-            <button
-              type="button"
-              onClick={exportVerdict}
-              disabled={!displayedResult}
-              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:bg-[#fff7f4] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Export
-            </button>
           </div>
         </header>
 
@@ -315,8 +332,15 @@ export default function Home() {
           elapsedSeconds={elapsedSeconds}
         />
 
-        {activeView === "hud" ? (
-          <>
+        <div
+          id={`workspace-panel-${activeView}`}
+          role="tabpanel"
+          aria-labelledby={`workspace-tab-${activeView}`}
+          tabIndex={0}
+          className="focus:outline-none"
+        >
+          {activeView === "hud" ? (
+            <>
             <WorkflowProgress
               result={displayedResult}
               isRunning={isRunning}
@@ -333,15 +357,7 @@ export default function Home() {
             />
 
             {displayedResult?.route.routeKind === "human_review" ? (
-              <HumanReviewPanel
-                result={displayedResult}
-                caseInput={caseInput}
-                evidenceAliases={evidenceAliases}
-                reviewerDecision={reviewerDecision}
-                similarCases={similarCases}
-                onDecisionChange={updateReviewerDecision}
-                onToggleEvidence={toggleReviewerEvidence}
-              />
+              <HumanReviewSummary result={displayedResult} onOpen={() => setActiveView("human-review")} />
             ) : null}
 
             {displayedResult?.route.routeKind === "provisional_ai_decision" ? (
@@ -382,11 +398,51 @@ export default function Home() {
                   cooldownRemaining={cooldownRemaining}
                   evidenceAliases={evidenceAliases}
                 />
-              </div>
-            </section>
-          </>
-        ) : (
-          <>
+                </div>
+              </section>
+            </>
+          ) : activeView === "human-review" ? (
+            <>
+              <WorkflowProgress
+                result={displayedResult}
+                isRunning={isRunning}
+                hasUnrunChanges={hasUnrunChanges}
+                elapsedSeconds={elapsedSeconds}
+              />
+
+              {displayedResult?.route.routeKind === "human_review" ? (
+                <HumanReviewPanel
+                  result={displayedResult}
+                  caseInput={caseInput}
+                  evidenceAliases={evidenceAliases}
+                  reviewerDecision={reviewerDecision}
+                  similarCases={similarCases}
+                  onDecisionChange={updateReviewerDecision}
+                  onToggleEvidence={toggleReviewerEvidence}
+                />
+              ) : displayedResult?.route.routeKind === "provisional_ai_decision" ? (
+                <CooldownOverridePanel
+                  result={displayedResult}
+                  cooldownRemaining={cooldownRemaining}
+                  overridePoint={overridePoint}
+                  onOverridePointChange={setOverridePoint}
+                />
+              ) : (
+                <section className="rounded-md border border-line bg-white p-4 shadow-soft">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-5 w-5 text-teal" aria-hidden="true" />
+                    <h2 className="text-base font-semibold">Human Review</h2>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-graphite">
+                    {isRunning || hasUnrunChanges
+                      ? "Run workflow to refresh the review path."
+                      : "No human final decision is required for this route."}
+                  </p>
+                </section>
+              )}
+            </>
+          ) : (
+            <>
             <WorkflowProgress
               result={displayedResult}
               isRunning={isRunning}
@@ -396,16 +452,16 @@ export default function Home() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px] 2xl:grid-cols-[minmax(0,1.45fr)_460px]">
               <div className="grid gap-4">
-                <JuryPanel
-                  opinions={displayedResult?.jury?.opinions ?? []}
-                  isRunning={isRunning}
-                  routeKind={displayedResult?.route.routeKind}
-                  evidenceAliases={evidenceAliases}
-                />
                 <DeliberationPanel
                   result={displayedResult?.jury ?? null}
                   routeKind={displayedResult?.route.routeKind}
                   caseInput={caseInput}
+                  evidenceAliases={evidenceAliases}
+                />
+                <JuryPanel
+                  opinions={displayedResult?.jury?.opinions ?? []}
+                  isRunning={isRunning}
+                  routeKind={displayedResult?.route.routeKind}
                   evidenceAliases={evidenceAliases}
                 />
               </div>
@@ -421,9 +477,49 @@ export default function Home() {
                 <SimilarPastCases caseInput={caseInput} similarCases={similarCases} />
               </div>
             </section>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </main>
+  );
+}
+
+function HumanReviewSummary({
+  result,
+  onOpen
+}: {
+  result: WorkflowResult;
+  onOpen: () => void;
+}) {
+  const warningCount = result.humanReviewContext?.warnings.length ?? result.route.warnings.length;
+  const focusCount = result.humanReviewContext?.suggestedReviewFocus.length ?? 0;
+
+  return (
+    <section className="rounded-md border border-coral/30 bg-[#fce8e6] p-4 text-coral shadow-soft">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5" aria-hidden="true" />
+            <h2 className="text-base font-semibold">Human Review Required</h2>
+          </div>
+          <p className="mt-2 text-sm leading-6">
+            {result.route.routingReason}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a62f08]"
+        >
+          <UserCheck className="h-4 w-4" aria-hidden="true" />
+          Open Human Review
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+        <span className="rounded-md border border-coral/30 bg-white px-2.5 py-1">Warnings: {warningCount}</span>
+        <span className="rounded-md border border-coral/30 bg-white px-2.5 py-1">Review focus: {focusCount}</span>
+      </div>
+    </section>
   );
 }

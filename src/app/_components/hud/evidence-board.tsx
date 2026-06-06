@@ -35,7 +35,7 @@ export function EvidenceBoard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1fr)] xl:max-h-[760px] xl:overflow-y-auto xl:pr-1">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1fr)]">
         <EvidenceColumn
           title="Buyer"
           subtitle={summarizeHistory(caseInput.buyerHistory)}
@@ -78,7 +78,7 @@ function EvidenceColumn({
   context: string;
 }) {
   return (
-    <div className="rounded-md border border-line bg-[#f5f5f5] p-3">
+    <div className="min-w-0 rounded-md border border-line bg-[#f5f5f5] p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-teal">{icon}</span>
@@ -88,7 +88,7 @@ function EvidenceColumn({
           </div>
         </div>
       </div>
-      <p className="mt-3 rounded-md bg-white p-2 text-xs leading-5 text-graphite">{context}</p>
+      <p className="mt-3 rounded-md bg-white p-2 text-xs leading-5 text-graphite [overflow-wrap:anywhere]">{context}</p>
       <div className="mt-3 grid gap-3">
         {evidence.length ? (
           evidence.map((item) => (
@@ -112,7 +112,7 @@ function NeutralEvidenceColumn({
   evidenceAliases: EvidenceAliases;
 }) {
   return (
-    <div className="rounded-md border border-teal/20 bg-[#fff7f4] p-3">
+    <div className="min-w-0 rounded-md border border-teal/20 bg-[#fff7f4] p-3">
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-teal" aria-hidden="true" />
         <div>
@@ -158,7 +158,7 @@ function EvidenceCard({
   evidenceAliases: EvidenceAliases;
 }) {
   return (
-    <article className="rounded-md border border-line bg-white p-3">
+    <article className="min-w-0 rounded-md border border-line bg-white p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-mono text-xs font-semibold uppercase text-teal">
@@ -179,10 +179,12 @@ function EvidenceCard({
         <img
           src={evidence.imageDataUrl}
           alt={evidence.label}
+          loading="lazy"
+          decoding="async"
           className="mt-3 aspect-[16/10] w-full rounded-md border border-line object-cover"
         />
       ) : null}
-      <MarkdownText className="mt-3 text-sm leading-6 text-graphite" text={evidence.summary} />
+      <MarkdownText className="mt-3 text-sm leading-6 text-graphite [overflow-wrap:anywhere]" text={evidence.summary} />
     </article>
   );
 }

@@ -1,5 +1,7 @@
-import { AlertTriangle, BadgeCheck, Gavel, Loader2, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
+"use client";
+
+import { AlertTriangle, BadgeCheck, Gavel, Loader2, Sparkles, UserCheck } from "lucide-react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { WorkflowResult } from "@/types/jury";
 import { getWorkflowStage, routeLabels, type WorkspaceView } from "../_lib/workspace";
 
@@ -32,6 +34,12 @@ export function WorkspaceTabs({
       icon: <Gavel className="h-4 w-4" aria-hidden="true" />
     },
     {
+      id: "human-review",
+      label: "Human Review",
+      summary: "Final verdict, rationale, and handoff record",
+      icon: <UserCheck className="h-4 w-4" aria-hidden="true" />
+    },
+    {
       id: "ai-jury",
       label: "AI Jury Panel",
       summary: "Agent reasoning, disagreement, and audit trail",
@@ -46,21 +54,41 @@ export function WorkspaceTabs({
         ? routeLabels[result.route.routeKind]
         : "Awaiting workflow";
 
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+      return;
+    }
+
+    event.preventDefault();
+    const nextIndex = event.key === "ArrowRight"
+      ? (index + 1) % views.length
+      : (index - 1 + views.length) % views.length;
+    const nextView = views[nextIndex];
+    onChange(nextView.id);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`workspace-tab-${nextView.id}`)?.focus();
+    });
+  }
+
   return (
     <nav
       aria-label="Reviewer workspace views"
       className="grid gap-3 rounded-md border border-line bg-white p-2 shadow-soft lg:grid-cols-[minmax(0,1fr)_auto]"
     >
-      <div className="grid gap-2 sm:grid-cols-2" role="tablist" aria-label="Workspace view">
-        {views.map((view) => {
+      <div className="grid gap-2 md:grid-cols-3" role="tablist" aria-label="Workspace view">
+        {views.map((view, index) => {
           const selected = activeView === view.id;
           return (
             <button
               key={view.id}
+              id={`workspace-tab-${view.id}`}
               type="button"
               role="tab"
               aria-selected={selected}
+              aria-controls={`workspace-panel-${view.id}`}
+              tabIndex={selected ? 0 : -1}
               onClick={() => onChange(view.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
               className={`min-h-16 rounded-md border px-3 py-2 text-left transition ${
                 selected
                   ? "border-teal bg-[#fff7f4] text-ink shadow-brand"
